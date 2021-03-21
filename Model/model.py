@@ -1,15 +1,10 @@
-import torch
-import torchvision
-import torchvision.transforms as transforms
 import torch.nn as nn
-import torch.nn.functional as F
-
 #from parts import Attention
-from parts import Conv3DRelu
-from parts import ConvLstm2DRelu
-from parts import EndecBlock
-from parts import Up
-from parts import Up2
+from Model.parts import Conv3DRelu
+from Model.parts import ConvLstm2DRelu
+from Model.parts import EndecBlock
+from Model.parts import Up
+from Model.parts import Up2
 
 
 class Net(nn.Module):
@@ -51,13 +46,15 @@ class Net(nn.Module):
     #~~~~~~~~~~~~~~~~~~~ Forward ~~~~~~~~~~~~~~~~~~~~~~
     
     def forward(self, x):
-        
         #~~~~~~~~~~~~~~~~~~~ Encoder ~~~~~~~~~~~~~~~~~~~~~~
-        
+        print("tensor - x = ",x.size())
         x0      = self.conv3DRelu0(x)
+        print("tensor - x0 = ",x0.size())
         
         x1, x1_ = self.endecBlock1(x0)
+        print("tensor - x1, x1_ = ",x1.size(), " --- ", x1_size())
         x1_     = self.conv3DRelu1(x1_)
+        print("tensor - x1_ = ",x1_.size())
         
         x2, x2_ = self.endecBlock2(x1_)
         x2_     = self.conv3DRelu2(x2_)
@@ -77,17 +74,4 @@ class Net(nn.Module):
         x       = self.activation(x)
         
         return x
-
-# model static attributes
-n_channels = 3
-p_dropout=0.2
-
-# instance the model
-net = Net(
-    n_channels, 
-    p_dropout
-)
-print(net)
-
-
 

@@ -1,10 +1,7 @@
 import torch
-import torchvision
-import torchvision.transforms as transforms
 import torch.nn as nn
-import torch.nn.functional as F
 import tensorflow as tf
-from ConvLstm import *
+from Model.ConvLstm import ConvLSTM
 
 #~~~~~~~~~~~~~~~~~~~ Attention ~~~~~~~~~~~~~~~~~~~~~~
 
@@ -42,12 +39,14 @@ class Conv3DRelu(nn.Module):
 
     def __init__(self, in_channels, out_channels, kernel_size=(1, 3, 3), stride=(1, 1, 1)):
         super().__init__()
-        padding = (kernel_size[0]//2, kernel_size[0]//2, 0)
+        padding = (kernel_size[0]//2, kernel_size[1]//2, kernel_size[2]//2)
         self.conv3d = nn.Conv3d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding)
         self.relu   = nn.ReLU()
         
     def forward(self, input_tensor) :
-        return self.relu(self.conv3d(input_tensor))
+        x = self.conv3d(input_tensor)
+        x = self.relu(x)
+        return x
     
 
 
@@ -80,14 +79,16 @@ class EndecBlock(nn.Module):
         self.channels_concat    = in_channels + 16
         
         self.conv3DRelu1        = Conv3DRelu(in_channels, out_channels=32, kernel_size=(1, 3, 3), stride=(1, 2, 2))
-        self.convTranspose3d    = nn.ConvTranspose3d(in_channels=32, out_channels=16, kernel_size=(2, 3, 3), stride=(1, 2, 2), padding=(1, 1, 0))
+        self.convTranspose3d    = nn.ConvTranspose3d(in_channels=32, out_channels=16, kernel_size=(2, 3, 3), stride=(1, 2, 2),padding=(1, 1, 1))
         self.batchNormalization = nn.BatchNorm2d(self.channels_concat)
         self.conv3DRelu2        = Conv3DRelu(self.channels_concat, out_channels=out_channels, kernel_size=(1, 3, 3), stride=(1, 1, 1))
 
     def forward(self, input_tensor) :
         x  = self.conv3DRelu1(input_tensor)
+        print("tensor - x = ", input_tensor.size())
         x_ = self.convTranspose3d(x)
-        x_ = torch.cat([input_tensor, x_], dim=-1)
+        print("tensor - x, x_ = ", x.size(), " --- ", x_.size())
+        x_ = torch.cat([input_tensor, x_], dim=1)
         x_ = self.batchNormalization(x_)
         x_ = self.conv3DRelu2(x_)
         return x, x_
@@ -114,11 +115,11 @@ class Up(nn.Module):
     def forward(self, input_tensor, prev_tensor1, prev_tensor2) :
         x = self.convTranspose3d(input_tensor)
         x = self.atention(x, prev_tensor1)
-        x = torch.cat([prev_tensor1, x], dim=-1)
+        x = torch.cat([prev_tensor1, x], dim=1)
         x = self.conv3D(x)
         x = self.batchNormalization(x)
         x = self.relu(x)
-        x = torch.cat([x, prev_tensor2], dim=-1)
+        x = torch.cat([x, prev_tensor2], dim=1)
         return x
 
 #~~~~~~~~~~~~~~~~~~~ Up2 ~~~~~~~~~~~~~~~~~~~~~~
@@ -139,7 +140,7 @@ class Up2(nn.Module):
     def forward(self, input_tensor, prev_tensor) :
         x = self.convTranspose3d(input_tensor)
         x = self.atention(x, prev_tensor)
-        x = torch.cat([prev_tensor, x], dim=-1)
+        x = torch.cat([prev_tensor, x], dim=1)
         x = self.conv3D(x)
         x = self.batchNormalization(x)
         x = self.relu(x)
