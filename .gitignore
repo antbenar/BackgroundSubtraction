@@ -17,8 +17,11 @@ Thumbs.db
 *.mov
 *.wmv
 
-# Large Results
+# Folders
 TrainResult/
+runs/
+.pylint.d/
+logs/
 
-# Large Results
+# python
 __pycache__

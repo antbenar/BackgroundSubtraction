@@ -1,5 +1,5 @@
 import torch.nn as nn
-#from parts import Attention
+#from parts      import Attention
 from Model.parts import Conv3DRelu
 from Model.parts import ConvLstm2DRelu
 from Model.parts import EndecBlock
@@ -43,8 +43,10 @@ class Net(nn.Module):
         self.activation  = Conv3DRelu(32, 1, kernel_size=(1, 3, 3), stride=(1, 1, 1))
         
         
-    #~~~~~~~~~~~~~~~~~~~ Forward ~~~~~~~~~~~~~~~~~~~~~~
-    
+    #----------------------------------------------------------------------------------------
+    # Forward
+    #----------------------------------------------------------------------------------------
+        
     def forward(self, x):
         
         #~~~~~~~~~~~~~~~~~~~ Encoder ~~~~~~~~~~~~~~~~~~~~~~
@@ -73,6 +75,10 @@ class Net(nn.Module):
         return x
     
     
+    #----------------------------------------------------------------------------------------
+    # Forward with print out channels
+    #----------------------------------------------------------------------------------------
+        
     """
     def forward(self, x):
         

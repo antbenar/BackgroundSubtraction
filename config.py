@@ -16,17 +16,27 @@ class Init(object):
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~ settings model ~~~~~~~~~~~~~~~~~~~~~~~~~~~
         
         self.model_name         = 'AtentionUnetLSTM_model'
-        
         self.n_channels         = 3
         self.p_dropout          = 0.2
-        #train
-        self.epochs             = 20
+        
+        # train
+        self.epochs             = 5
         self.val_split          = 0.2
-        self.batch_size         = 5
+        self.batch_size         = 2
         self.shuffle            = False
-        self.lr                 = 1e-4
         self.train_result_dir   = os.path.join('TrainResult')
         
+        # optimizer
+        self.beta_a             = 0.9
+        self.beta_b             = 0.999
+        self.lr                 = 1e-4
+        
+        # tensorboard
+        self.logdir             = "logs_tensorboard/"
+        # always differents dir
+        self.train_loss_dir     = "Training_loss"
+        # with same tag we cluster many plots
+        self.train_loss_tag     = "Training_loss"
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~ settings dataset ~~~~~~~~~~~~~~~~~~~~~~~~~~~
         
         self.dataset_dir        = os.path.join('..', '..', 'CDnet2014_dataset')

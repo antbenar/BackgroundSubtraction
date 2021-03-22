@@ -2,19 +2,33 @@ import torch
 import numpy as np
 import os
 import glob
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from matplotlib import pyplot as plt
 from keras.preprocessing import image as kImage
 
 class GenerateData(Dataset):
     
-    def __init__(self, dataset_gt_dir, dataset_dir, framesBack, trainStart, trainEnd, transform=None, data_format='channels_last'):
+    def __init__(
+                     self, dataset_gt_dir, 
+                     dataset_dir, 
+                     framesBack, 
+                     trainStart, 
+                     trainEnd, 
+                     transform=None, 
+                     data_format='channels_last',
+                     void_value = True,
+                     showSample = False
+                 ):
         """
         Args:
-            csv_file (string): Path to the csv file with annotations.
-            root_dir (string): Directory with all the images.
-            transform (callable, optional): Optional transform to be applied
-                on a sample.
+            dataset_gt_dir (string): Path to the input dir.
+            dataset_dir (string): Path to the groundtruth dir.
+            framesBack (int): Number of frames_back in out temporal subsets
+            trainStart (int): Index of the first element to take into our data set
+            trainEnd (int): Index of the last element to take into our data set
+            transform: Null
+            data_format (string): If the chanels are in last dim
+            showSample (Boolean): If true plot the intermediate frame to qualitatively validate our trainset
         """
         self.dataset_gt_dir = dataset_gt_dir
         self.dataset_dir = dataset_dir
@@ -25,11 +39,25 @@ class GenerateData(Dataset):
         self.trainStart = trainStart
         self.trainEnd = trainEnd
         self.void_label = -1.
-    
+        self.void_value = void_value
         self.dataset = self.generate()
+        
+        if(showSample):
+            ## plot the intermediate frame to qualitatively validate our trainset
+            self.plotSample(idx_frame=(self.trainEnd-self.trainStart)//2)
+    
+    
+    #----------------------------------------------------------------------------------------
+    # Function to get length of the dataset
+    #----------------------------------------------------------------------------------------
     
     def __len__(self):
         return len(self.dataset[0])
+    
+    
+    #----------------------------------------------------------------------------------------
+    # function to retrieve an element by index
+    #----------------------------------------------------------------------------------------
     
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
@@ -141,15 +169,18 @@ class GenerateData(Dataset):
         for i in range(len(Y_list)):
             img = kImage.load_img(Y_list[i], color_mode = "grayscale")
             img = kImage.img_to_array(img)
-            shape = img.shape
-            img/=255.0
-            img = img.reshape(-1)
-            idx = np.where(np.logical_and(img>0.25, img<0.8))[0] # find non-ROI
-            if (len(idx)>0):
-                img[idx] = self.void_label
-            x = img.reshape(shape)
-            x = np.floor(x)
-            Y.append(x)
+            
+            if(self.void_value):
+                shape = img.shape
+                img/=255.0
+                img = img.reshape(-1)
+                idx = np.where(np.logical_and(img>0.25, img<0.8))[0] # find non-ROI
+                if (len(idx)>0):
+                    img[idx] = self.void_label
+                img = img.reshape(shape)
+                img = np.floor(img)
+            
+            Y.append(img)
             
         return np.asarray(Y)
     
@@ -165,11 +196,18 @@ class GenerateData(Dataset):
         inputs, gt = self.dataset[0][idx_frame], self.dataset[1][idx_frame]
         
         if (self.data_format=='channels_last'):
-            #Given a sequence of frames, divide in groups of five consecutive frames
             inputs = np.moveaxis(inputs, 0, -1)
             gt = np.moveaxis(gt, 0, -1)
-            
-
+           
+        # change -1 to a gray color
+        if(self.void_value):
+            shape = gt.shape
+            gt/=255.0
+            gt = gt.reshape(-1)
+            idx = np.where(gt==-1)[0] # find non-ROI
+            if (len(idx)>0):
+                gt[idx] = 0.55
+            gt = gt.reshape(shape)
     
         ax = plt.subplot(1, 2, 1)
         ax.set_title('Input #{}'.format(idx_frame))
@@ -180,7 +218,7 @@ class GenerateData(Dataset):
         ax2 = plt.subplot(1, 2, 2)
         ax2.set_title('Gt #{}'.format(idx_frame))
         ax2.axis('off')
-        plt.imshow(gt[0]/255, cmap=plt.get_cmap('gray'))
+        plt.imshow(gt[0], cmap=plt.get_cmap('gray'))
         plt.tight_layout()
 
         plt.show()

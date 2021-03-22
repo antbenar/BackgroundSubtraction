@@ -1,9 +1,9 @@
 import os
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from Model.model import Net
-from Dataset.generateData import GenerateData
+import torch.nn   as nn
+from Model.model                         import Net
+from Dataset.generateData                import GenerateData
+from Tensorboard.TensorboardTool         import TensorBoardTool
 
 class ModelTrain(nn.Module):
     def __init__(self, init):
@@ -31,10 +31,13 @@ class ModelTrain(nn.Module):
     def train(self, trainloader, train_result_dir):
         criterion_loss = nn.MSELoss(reduction='sum')
         #criterion_loss = nn.BCELoss()
-        optimizer = torch.optim.Adam(self.net.parameters(), lr=self.init.lr, betas=(0.9, 0.999))
+        optimizer = torch.optim.Adam(self.net.parameters(), lr=self.init.lr, betas=(self.init.beta_a, self.init.beta_b))
         
+        # create tensorboard tool
+        tensorBoardTool = TensorBoardTool(self.init.logdir)        
+                
         for epoch in range(self.init.epochs):  # loop over the dataset multiple times
-            print("len_trainloader = ",len(trainloader))
+            print("Epoch = ", epoch+1)
             running_loss = 0.0
             
             for i_batch, sample_batched  in enumerate(trainloader):
@@ -51,17 +54,30 @@ class ModelTrain(nn.Module):
                 loss.backward()
                 optimizer.step()
         
-                # print statistics
+                # print statistics every num_stat_batches
                 running_loss += loss.item()
-                if i_batch % 2 == 0:  # print every 2000 mini-batches
+                num_stat_batches = 2
+                if (i_batch+1) % num_stat_batches == 0:  # print every 2000 mini-batches
                     print('[%d, %5d] loss: %.3f' %
-                          (epoch + 1, i_batch + 1, running_loss / 2000))
+                          (epoch + 1, i_batch + 1, running_loss / num_stat_batches))
+                    
+                    tensorBoardTool.saveTrainLoss(
+                        name_folder = self.init.train_loss_dir,
+                        tag         = self.init.train_loss_tag,
+                        loss        = running_loss / num_stat_batches, 
+                        step        = epoch * len(trainloader) + i_batch
+                    )
+                    
                     running_loss = 0.0
                     
                 del loss, outputs
                 
+        
         print('Finished Training')
         
+        # run tensorboard
+        tensorBoardTool.closeWriter()
+        tensorBoardTool.run()
         
         # save the model
         torch.save(self.net.state_dict(), train_result_dir)
@@ -93,7 +109,8 @@ class ModelTrain(nn.Module):
                     framesBack=self.init.framesBack,
                     trainStart=self.init.trainStart,
                     trainEnd=self.init.trainEnd,
-                    data_format=self.init.data_format
+                    data_format=self.init.data_format,
+                    showSample = True
                 )
                 
                 trainloader = torch.utils.data.DataLoader(
@@ -103,17 +120,54 @@ class ModelTrain(nn.Module):
                     num_workers=self.init.num_workers
                 )
                 
-                ## plot the intermediate frame to qualitatively validate our trainset
-                # trainset.plotSample(idx_frame=(self.init.trainEnd-self.init.trainStart)//2)
-                
                 #~~~~~~~~~~~~~~~~~~~~~ Train net for this scene ~~~~~~~~~~~~~~~~~~~~~
                 
-                #print("~~~~~~~ Training ->>> " + category + " / " + scene + " ~~~~~~~~~~")
+                print("~~~~~~~ Training ->>> " + category + " / " + scene + " ~~~~~~~~~~")
                 train_result_dir = os.path.join(self.init.train_result_dir, 'mdl_' + category + '_' + scene + '.h5')
                 self.train(trainloader, train_result_dir)
                 del trainset
           
+    #----------------------------------------------------------------------------------------
+    # Function to iterate over categories and scenes to save the data with tensorboard
+    #----------------------------------------------------------------------------------------
+        
+    def saveTrainData(self):
+        # Go through each scene
+        for category, scene_list in self.init.dataset.items():     
+            for scene in scene_list: 
                 
+                #~~~~~~~~~~~~~~~~~~~~~ Load dataset for this scene ~~~~~~~~~~~~~~~~~~~~~
+                
+                print("~~~~~~~ Generating data ->>> " + category + " / " + scene + " ~~~~~~~~~~")
+
+                dataset_dir = os.path.join(self.init.dataset_dir, category, scene, 'input')
+                dataset_gt_dir = os.path.join(self.init.dataset_dir, category, scene, 'groundtruth')
+                
+                trainset = GenerateData(
+                    dataset_gt_dir, dataset_dir,
+                    framesBack=self.init.framesBack,
+                    trainStart=self.init.trainStart,
+                    trainEnd=self.init.trainEnd,
+                    data_format=self.init.data_format,
+                    void_value = False,
+                    showSample = True
+                )
+                
+                trainloader = torch.utils.data.DataLoader(
+                    trainset, 
+                    batch_size=self.init.batch_size, 
+                    shuffle=self.init.shuffle, 
+                    num_workers=self.init.num_workers
+                )
+                
+                # Save to tensorboard
+                tensorBoardTool = TensorBoardTool(self.init.logdir)
+                idx = (self.init.trainEnd - self.init.trainStart)//2
+                tensorBoardTool.saveDataloader(trainloader, idx)
+                tensorBoardTool.saveNet(self.net, trainloader, self.device)
+                tensorBoardTool.run()
+                
+        
     #----------------------------------------------------------------------------------------
     # Function to print a summary of the network
     #----------------------------------------------------------------------------------------
@@ -122,23 +176,4 @@ class ModelTrain(nn.Module):
         print(self.net)
         
         
-    #----------------------------------------------------------------------------------------
-    # Use tensorboard to save data of the model
-    #----------------------------------------------------------------------------------------
-    """
-    def saveTensorboard(self, idx_frame): 
-        
-        inputs, gt = self.dataset[0][idx_frame], self.dataset[1][idx_frame]
-        
-        if (self.data_format=='channels_last'):
-            #Given a sequence of frames, divide in groups of five consecutive frames
-            inputs = np.moveaxis(inputs, 0, -1)
-            gt = np.moveaxis(gt, 0, -1)
-        
-        # Writer will output to ./runs/ directory by default
-        writer = SummaryWriter()
-        grid = torchvision.utils.make_grid(images)
-        writer.add_image('Input #{}'.format(idx_frame), grid, 0)
-        writer.add_graph(model, images)
-        writer.close()
-    """
+
