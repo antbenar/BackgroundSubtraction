@@ -1,5 +1,6 @@
 import torch
 import os
+from datetime import datetime
 
 class Init(object):
     
@@ -32,9 +33,9 @@ class Init(object):
         self.lr                 = 1e-4
         
         # tensorboard
-        self.logdir             = "logs_tensorboard/"
+        self.logdir             = "logs_tensorboard/Training_loss2_" + datetime.now().strftime("%d-%m-%Y_%H-%M-%S") + "/"
         # always differents dir
-        self.train_loss_dir     = "Training_loss"
+        self.train_loss_dir     = "Training_loss2"
         # with same tag we cluster many plots
         self.train_loss_tag     = "Training_loss"
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~ settings dataset ~~~~~~~~~~~~~~~~~~~~~~~~~~~
