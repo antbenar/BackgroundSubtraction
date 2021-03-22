@@ -24,9 +24,13 @@ class ModelTrain(nn.Module):
         self.net.to(self.device)
         
         
-    def train(self, trainloader, train_result_dir):
+    #----------------------------------------------------------------------------------------
+    # Function to train the model
+    #----------------------------------------------------------------------------------------
         
-        criterion_loss = nn.BCELoss()
+    def train(self, trainloader, train_result_dir):
+        criterion_loss = nn.MSELoss(reduction='sum')
+        #criterion_loss = nn.BCELoss()
         optimizer = torch.optim.Adam(self.net.parameters(), lr=self.init.lr, betas=(0.9, 0.999))
         
         for epoch in range(self.init.epochs):  # loop over the dataset multiple times
@@ -35,9 +39,6 @@ class ModelTrain(nn.Module):
             
             for i_batch, sample_batched  in enumerate(trainloader):
                 # get the inputs; data is a list of [inputs, labels]
-                print("Values batch ", i_batch, sample_batched['inputs'].size(), sample_batched['gt'].size())
-
-
                 inputs      = sample_batched['inputs'].to(self.device)
                 groundtruth = sample_batched['gt'].to(self.device)
         
@@ -52,17 +53,22 @@ class ModelTrain(nn.Module):
         
                 # print statistics
                 running_loss += loss.item()
-                if i_batch % 2000 == 1999:  # print every 2000 mini-batches
+                if i_batch % 2 == 0:  # print every 2000 mini-batches
                     print('[%d, %5d] loss: %.3f' %
                           (epoch + 1, i_batch + 1, running_loss / 2000))
                     running_loss = 0.0
+                    
+                del loss, outputs
                 
         print('Finished Training')
+        
         
         # save the model
         torch.save(self.net.state_dict(), train_result_dir)
         
-        
+    #----------------------------------------------------------------------------------------
+    # Function to iterate over categories and scenes and train the model for each one
+    #----------------------------------------------------------------------------------------
         
     def execute(self):
         
@@ -98,7 +104,7 @@ class ModelTrain(nn.Module):
                 )
                 
                 ## plot the intermediate frame to qualitatively validate our trainset
-                trainset.plotSample(idx_frame=(self.init.trainEnd-self.init.trainStart)//2)
+                # trainset.plotSample(idx_frame=(self.init.trainEnd-self.init.trainStart)//2)
                 
                 #~~~~~~~~~~~~~~~~~~~~~ Train net for this scene ~~~~~~~~~~~~~~~~~~~~~
                 
@@ -106,7 +112,33 @@ class ModelTrain(nn.Module):
                 train_result_dir = os.path.join(self.init.train_result_dir, 'mdl_' + category + '_' + scene + '.h5')
                 self.train(trainloader, train_result_dir)
                 del trainset
+          
                 
-        
+    #----------------------------------------------------------------------------------------
+    # Function to print a summary of the network
+    #----------------------------------------------------------------------------------------
+    
     def summaryNet(self):
         print(self.net)
+        
+        
+    #----------------------------------------------------------------------------------------
+    # Use tensorboard to save data of the model
+    #----------------------------------------------------------------------------------------
+    """
+    def saveTensorboard(self, idx_frame): 
+        
+        inputs, gt = self.dataset[0][idx_frame], self.dataset[1][idx_frame]
+        
+        if (self.data_format=='channels_last'):
+            #Given a sequence of frames, divide in groups of five consecutive frames
+            inputs = np.moveaxis(inputs, 0, -1)
+            gt = np.moveaxis(gt, 0, -1)
+        
+        # Writer will output to ./runs/ directory by default
+        writer = SummaryWriter()
+        grid = torchvision.utils.make_grid(images)
+        writer.add_image('Input #{}'.format(idx_frame), grid, 0)
+        writer.add_graph(model, images)
+        writer.close()
+    """

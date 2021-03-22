@@ -20,9 +20,9 @@ class Init(object):
         self.n_channels         = 3
         self.p_dropout          = 0.2
         #train
-        self.epochs             = 50
+        self.epochs             = 20
         self.val_split          = 0.2
-        self.batch_size         = 2
+        self.batch_size         = 5
         self.shuffle            = False
         self.lr                 = 1e-4
         self.train_result_dir   = os.path.join('TrainResult')

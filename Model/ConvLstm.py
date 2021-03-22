@@ -35,7 +35,8 @@ class ConvLSTMCell(nn.Module):
                               out_channels=4 * self.hidden_dim,
                               kernel_size=self.kernel_size,
                               padding=self.padding,
-                              bias=self.bias)
+                              bias=self.bias
+                              )
 
     def forward(self, input_tensor, cur_state):
         h_cur, c_cur = cur_state
@@ -113,7 +114,7 @@ class ConvLSTM(nn.Module):
                                           hidden_dim=self.hidden_dim[i],
                                           kernel_size=self.kernel_size[i],
                                           bias=self.bias))
-
+            
         self.cell_list = nn.ModuleList(cell_list)
 
     def forward(self, input_tensor, hidden_state=None):
@@ -128,10 +129,12 @@ class ConvLSTM(nn.Module):
         -------
         last_state_list, layer_output
         """
+
+        """
         if not self.batch_first:
             # (t, b, c, h, w) -> (b, t, c, h, w)
             input_tensor = input_tensor.permute(1, 0, 2, 3, 4)
-
+        """
         b, _, _, h, w = input_tensor.size()
 
         # Implement stateful ConvLSTM

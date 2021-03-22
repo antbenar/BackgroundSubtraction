@@ -139,7 +139,7 @@ class GenerateData(Dataset):
         Y = []
     
         for i in range(len(Y_list)):
-            img = kImage.load_img(Y_list[i], grayscale = True)
+            img = kImage.load_img(Y_list[i], color_mode = "grayscale")
             img = kImage.img_to_array(img)
             shape = img.shape
             img/=255.0
@@ -184,3 +184,5 @@ class GenerateData(Dataset):
         plt.tight_layout()
 
         plt.show()
+        
+        
