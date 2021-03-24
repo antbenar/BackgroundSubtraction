@@ -1,9 +1,15 @@
 import os
 import torch
-import torch.nn   as nn
+import torch.nn              as nn
+import numpy                 as np
+import torch.nn.functional   as F
 from Model.model                         import Net
 from Dataset.generateData                import GenerateData
-from Tensorboard.TensorboardTool         import TensorBoardTool
+from Common.TensorboardTool              import TensorBoardTool
+from Common.Util                         import Averager
+from torch.utils.data.sampler            import SubsetRandomSampler
+from torch.utils.tensorboard             import SummaryWriter
+
 
 class ModelTrain(nn.Module):
     def __init__(self, init):
@@ -14,7 +20,8 @@ class ModelTrain(nn.Module):
         self.n_channels = init.n_channels
         self.p_dropout = init.p_dropout
         self.device = init.device
-                
+        self._state    = {}
+        
         # instance the model
         self.net = Net(
             self.n_channels, 
@@ -23,64 +30,163 @@ class ModelTrain(nn.Module):
         # net to device
         self.net.to(self.device)
         
+        #optimizer
+        self.optimizer    = torch.optim.Adam(self.net.parameters(), lr=self.init.lr, betas=(self.init.beta_a, self.init.beta_b))
+
+        # set lost
+        #self.criterion_loss = nn.MSELoss(reduction='sum')
+        self.criterion_loss = self._bce_loss
+        
+        
+    #----------------------------------------------------------------------------------------
+    # Training state functions
+    #----------------------------------------------------------------------------------------
+      
+    def _state_reset(self):
+        self._state = {}
+    def _state_add(self,name,attr):
+        self._state[name]=attr
+    def _state_save(self,epoch):
+        # Save model
+        pathMod = os.path.join(self.init.train_result_dir, 'mdl_' + self.category + '_' + self.scene + str(epoch) + '.pth')
+        torch.save( self._state, pathMod)
+     
+    #----------------------------------------------------------------------------------------
+    # Loss function
+    #----------------------------------------------------------------------------------------
+    def _bce_loss(self, prediction_, groundtruth_):
+        void_label  = -1.
+        prediction  = torch.reshape(prediction_, (-1,))
+        groundtruth = torch.reshape(groundtruth_, (-1,))
+        
+        mask        = torch.where(groundtruth == void_label, False, True)
+        
+        prediction  = torch.masked_select(prediction, mask)
+        groundtruth = torch.masked_select(groundtruth, mask)
+
+        loss        = F.binary_cross_entropy(prediction, groundtruth, reduction='mean')
+        return loss
+
+    #----------------------------------------------------------------------------------------
+    # Threshold function
+    #----------------------------------------------------------------------------------------
+    def _threshold(self, img, thd):
+        img[img >= thd] = 1
+        img[img < thd]  = 0
+        return img  
+    
+    
+    #----------------------------------------------------------------------------------------
+    # Validation metrics
+    #----------------------------------------------------------------------------------------
+
+    def _metrics(self, prediction, groundtruth):
+        # (b, c, t, h, w) -> (t, b, h, w, c)
+        prediction  = prediction.permute(2, 0, 3, 4, 1)[0]
+        groundtruth = groundtruth.permute(2, 0, 3, 4, 1)[0]
+        prediction  = self._threshold(prediction, self.init.threshold)
+
+        FP = torch.sum((prediction == 1) & (groundtruth == 0)).data.cpu().numpy()
+        FN = torch.sum((prediction == 0) & (groundtruth == 1)).data.cpu().numpy()
+        TP = torch.sum((prediction == 1) & (groundtruth == 1)).data.cpu().numpy()
+        TN = torch.sum((prediction == 0) & (groundtruth == 0)).data.cpu().numpy()
+
+        numDecimales = 3    
+
+        FMEASURE     = round( 2*TP/(2*TP+FP+FN), numDecimales)
+        PWC          = round( 100*(FN+FP)/(TP+FN+FP+TN), numDecimales)
+        
+        metricsMean  = [FMEASURE, PWC]
+
+        return metricsMean
         
     #----------------------------------------------------------------------------------------
     # Function to train the model
     #----------------------------------------------------------------------------------------
         
-    def train(self, trainloader, train_result_dir):
-        criterion_loss = nn.MSELoss(reduction='sum')
-        #criterion_loss = nn.BCELoss()
-        optimizer = torch.optim.Adam(self.net.parameters(), lr=self.init.lr, betas=(self.init.beta_a, self.init.beta_b))
+    def _train(self, epoch, train_loader):
+        # loss
+        running_loss = 0.0 
+        lossTrain    = Averager()
         
-        # create tensorboard tool
-        tensorBoardTool = TensorBoardTool(self.init.logdir)        
-                
-        for epoch in range(self.init.epochs):  # loop over the dataset multiple times
-            print("Epoch = ", epoch+1)
-            running_loss = 0.0
+        for i_batch, sample_batched  in enumerate(train_loader):
+            # get the inputs; data is a list of [inputs, labels]
+            inputs      = sample_batched['inputs'].to(self.device)
+            groundtruth = sample_batched['gt'].to(self.device)
+    
+            # zero the parameter gradients
+            self.optimizer.zero_grad()
+            self.net .zero_grad()
             
-            for i_batch, sample_batched  in enumerate(trainloader):
-                # get the inputs; data is a list of [inputs, labels]
-                inputs      = sample_batched['inputs'].to(self.device)
-                groundtruth = sample_batched['gt'].to(self.device)
-        
-                # zero the parameter gradients
-                optimizer.zero_grad()
-        
-                # forward + backward + optimize
-                outputs = self.net(inputs)
-                loss = criterion_loss(outputs, groundtruth)
-                loss.backward()
-                optimizer.step()
-        
-                # print statistics every num_stat_batches
-                running_loss += loss.item()
-                num_stat_batches = 2
-                if (i_batch+1) % num_stat_batches == 0:  # print every 2000 mini-batches
-                    print('[%d, %5d] loss: %.3f' %
-                          (epoch + 1, i_batch + 1, running_loss / num_stat_batches))
-                    
-                    tensorBoardTool.saveTrainLoss(
-                        name_folder = self.init.train_loss_dir,
-                        tag         = self.init.train_loss_tag,
-                        loss        = running_loss / num_stat_batches, 
-                        step        = epoch * len(trainloader) + i_batch
-                    )
-                    
-                    running_loss = 0.0
-                    
-                del loss, outputs
+            # forward + backward + optimize
+            outputs = self.net(inputs)
+            loss = self.criterion_loss(outputs, groundtruth)
+            loss.backward()
+            self.optimizer.step()
+            
+            # print statistics every num_stat_batches
+            runtime_loss = loss.item()
+            running_loss += runtime_loss
+            view_batch = self.init.view_batch
+            
+            if (i_batch+1) % view_batch == 0:  # print every 2000 mini-batches
+                print('[%d, %5d] loss: %.3f' %
+                      (epoch + 1, i_batch + 1, running_loss / view_batch))
+                running_loss = 0.0
                 
+            lossTrain.update(runtime_loss)
+            del loss, outputs
+            
+        lossTrain = lossTrain.val()
+        print("Epoch training loss:",lossTrain)
+        return lossTrain
         
-        print('Finished Training')
+    #----------------------------------------------------------------------------------------
+    # Function to validate the training of the model
+    #----------------------------------------------------------------------------------------
         
-        # run tensorboard
-        tensorBoardTool.closeWriter()
-        tensorBoardTool.run()
+    def _validation(self, epoch, val_loader):
+        #loss
+        running_loss = 0.0 
+        lossVal      = Averager()
         
-        # save the model
-        torch.save(self.net.state_dict(), train_result_dir)
+        # Metrics [Steer,Gas,Brake]
+        avgMetrics   = Averager(2)
+        
+        for i_batch, sample_batched  in enumerate(val_loader):
+            # get the inputs; data is a list of [inputs, labels]
+            inputs      = sample_batched['inputs'].to(self.device)
+            groundtruth = sample_batched['gt'].to(self.device)
+    
+
+            # Predict
+            outputs = self.net(inputs)
+            loss    = self.criterion_loss(outputs, groundtruth)
+
+            # Metrics
+            mean    = self._metrics(outputs, groundtruth)
+            avgMetrics.update(mean)  
+            
+            # print statistics every num_stat_batches
+            runtime_loss  = loss.item()
+            running_loss += runtime_loss
+            view_batch = self.init.view_batch
+            
+            if (i_batch+1) % view_batch == 0:  # print every 2000 mini-batches
+                print('[%d, %5d] loss: %.3f' %
+                      (epoch + 1, i_batch + 1, running_loss / view_batch))
+                running_loss = 0.0
+                
+            lossVal.update(runtime_loss)
+            del loss, outputs
+            
+        lossVal = lossVal.val()
+        avgMetrics = avgMetrics.mean
+        
+        print("Epoch val train loss:",lossVal, ", f-measure:", avgMetrics[0], ", PWC:", avgMetrics[1])
+        return lossVal, avgMetrics
+    
+        
         
     #----------------------------------------------------------------------------------------
     # Function to iterate over categories and scenes and train the model for each one
@@ -96,7 +202,9 @@ class ModelTrain(nn.Module):
         # Go through each scene
         for category, scene_list in self.init.dataset.items():     
             for scene in scene_list: 
-                
+                self.category = category
+                self.scene    = scene
+
                 #~~~~~~~~~~~~~~~~~~~~~ Load dataset for this scene ~~~~~~~~~~~~~~~~~~~~~
                 
                 print("~~~~~~~ Generating data ->>> " + category + " / " + scene + " ~~~~~~~~~~")
@@ -104,29 +212,103 @@ class ModelTrain(nn.Module):
                 dataset_dir = os.path.join(self.init.dataset_dir, category, scene, 'input')
                 dataset_gt_dir = os.path.join(self.init.dataset_dir, category, scene, 'groundtruth')
                 
-                trainset = GenerateData(
+                dataset = GenerateData(
                     dataset_gt_dir, dataset_dir,
-                    framesBack=self.init.framesBack,
-                    trainStart=self.init.trainStart,
-                    trainEnd=self.init.trainEnd,
-                    data_format=self.init.data_format,
-                    showSample = True
+                    framesBack  = self.init.framesBack,
+                    trainStart  = self.init.trainStart,
+                    trainEnd    = self.init.trainEnd,
+                    data_format = self.init.data_format,
+                    resize      = self.init.resize,
+                    showSample  = True
                 )
                 
-                trainloader = torch.utils.data.DataLoader(
-                    trainset, 
-                    batch_size=self.init.batch_size, 
-                    shuffle=self.init.shuffle, 
-                    num_workers=self.init.num_workers
-                )
+                train_loader, val_loader, test_loader = self.train_val_test_split(dataset)
+                del test_loader # test_loader dont used here
                 
                 #~~~~~~~~~~~~~~~~~~~~~ Train net for this scene ~~~~~~~~~~~~~~~~~~~~~
                 
                 print("~~~~~~~ Training ->>> " + category + " / " + scene + " ~~~~~~~~~~")
-                train_result_dir = os.path.join(self.init.train_result_dir, 'mdl_' + category + '_' + scene + '.h5')
-                self.train(trainloader, train_result_dir)
-                del trainset
+                #TensorBoardTool(self.init.logdir).run()
+                tb = SummaryWriter(self.init.logdir)
+                
+                for epoch in range(self.init.epochs):  # loop over the dataset multiple times
+                    print("Epoch = ", epoch, "-"*40)
+                    
+                    lossTrain       =      self._train(epoch, train_loader)
+                    lossValid, metr = self._validation(epoch, val_loader)
+
+                    # add scalars to tensorboard
+                    tb.add_scalar('Loss/Train'        , lossTrain, epoch)
+                    tb.add_scalar('Loss/Validation'   , lossValid, epoch)
+                    tb.add_scalar('Metrics/F-Measure' , metr[0]  , epoch)
+                    tb.add_scalar('Metrics/PWC'       , metr[1]  , epoch)
+                    
+                    # Save checkpoint
+                    if epoch%2 == 0:
+                        self._state_add (     'epoch',                    epoch  )
+                        self._state_add ('state_dict',self.      net.state_dict())
+                        self._state_add ( 'optimizer',self.optimizer.state_dict())
+                        self._state_save(epoch)
+                
+                tb.close()
+                del dataset, train_loader, val_loader
           
+            
+    #----------------------------------------------------------------------------------------
+    # Function to separate the whole dataset into three subsets for training, validation of training and test
+    #----------------------------------------------------------------------------------------
+        
+    def train_val_test_split(self, dataset):
+        train_split_  = self.init.train_split
+        val_split_    = self.init.val_split
+        shuffle      = self.init.shuffle
+        
+        dataset_size = len(dataset)
+        indices      = list(range(dataset_size))
+        train_split  = int(np.floor(train_split_ * dataset_size))                # obtain the number of train samples
+        val_split   = int(np.floor(train_split_ * val_split_ * dataset_size))    # obtain the number of val samples
+        train_split  = train_split - val_split                                   # obtain the position where the train samples end
+        val_split    = train_split + 2*val_split                                 # obtain the position where the val samples end
+        
+        
+        if shuffle :
+            np.random.seed(1234)
+            np.random.shuffle(indices)
+            
+        train_indices, val_indices, test_indices = indices[:train_split], indices[train_split:val_split], indices[val_split:]
+        
+        # Creating PT data samplers and loaders:
+        train_sampler  = SubsetRandomSampler(train_indices)
+        valid_sampler  = SubsetRandomSampler(val_indices)
+        test_sampler   = SubsetRandomSampler(test_indices)
+        
+        train_loader = torch.utils.data.DataLoader(
+                            dataset, 
+                            batch_size  = self.init.batch_size, 
+                            shuffle     = self.init.shuffle, 
+                            num_workers = self.init.num_workers,
+                            sampler     = train_sampler
+                        )
+        
+        val_loader = torch.utils.data.DataLoader(
+                            dataset, 
+                            batch_size  = self.init.batch_size, 
+                            shuffle     = self.init.shuffle, 
+                            num_workers = self.init.num_workers,
+                            sampler     = valid_sampler
+                        )
+        
+        test_loader = torch.utils.data.DataLoader(
+                            dataset, 
+                            batch_size  = self.init.batch_size, 
+                            shuffle     = self.init.shuffle, 
+                            num_workers = self.init.num_workers,
+                            sampler     = test_sampler
+                        )
+        
+        return train_loader, val_loader, test_loader
+    
+    
     #----------------------------------------------------------------------------------------
     # Function to iterate over categories and scenes to save the data with tensorboard
     #----------------------------------------------------------------------------------------

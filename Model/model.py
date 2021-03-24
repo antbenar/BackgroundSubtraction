@@ -5,7 +5,7 @@ from Model.parts import ConvLstm2DRelu
 from Model.parts import EndecBlock
 from Model.parts import Up
 from Model.parts import Up2
-
+from Model.parts import Conv3DSigmoid
 
 class Net(nn.Module):
     def __init__(self, n_channels, p_dropout=0.2):
@@ -16,31 +16,31 @@ class Net(nn.Module):
 
         #~~~~~~~~~~~~~~~~~~~ Encoder ~~~~~~~~~~~~~~~~~~~~~~
         
-        self.conv3DRelu0 = Conv3DRelu(self.n_channels, 16, stride=(1, 1, 1))
+        self.conv3DRelu0 =     Conv3DRelu(self.n_channels, 16, stride=(1, 1, 1))
         #Block 1
-        self.endecBlock1 = EndecBlock(16, 16)
-        self.conv3DRelu1 = Conv3DRelu(16, 32)
+        self.endecBlock1 =     EndecBlock(16, 16)
+        self.conv3DRelu1 =     Conv3DRelu(16, 32)
         #Block 2
-        self.endecBlock2 = EndecBlock(32, 16)
-        self.conv3DRelu2 = Conv3DRelu(16, 32)
+        self.endecBlock2 =     EndecBlock(32, 16)
+        self.conv3DRelu2 =     Conv3DRelu(16, 32)
         #Block 3
-        self.endecBlock3 = EndecBlock(32, 16)
-        self.conv3DRelu3 = Conv3DRelu(16, 32)
+        self.endecBlock3 =     EndecBlock(32, 16)
+        self.conv3DRelu3 =     Conv3DRelu(16, 32)
         #Block convLSTM
         self.convLSTM    = ConvLstm2DRelu(32, hidden_dim=[16, 16, 16]) #entran 32 canales y salen 16
         
         #~~~~~~~~~~~~~~~~~~~ Decoder ~~~~~~~~~~~~~~~~~~~~~~
         
         #BlockDec 1
-        self.upBlock1    = Up(16, 64, kernel_size_convT=(3, 3, 3), stride_convT=(1, 1, 1), padding_convT=(1,1,1))
+        self.upBlock1    =             Up(16, 64, kernel_size_convT=(3, 3, 3), stride_convT=(1, 1, 1), padding_convT=(1,1,1))
         #BlockDec 2
-        self.upBlock2    = Up(64, 64)
+        self.upBlock2    =             Up(64, 64)
         #BlockDec 3
-        self.upBlock3    = Up(64, 64)
+        self.upBlock3    =             Up(64, 64)
         #BlockDec 4
-        self.upBlock4    = Up2(64, 32, p_dropout)
+        self.upBlock4    =            Up2(64, 32, p_dropout)
         
-        self.activation  = Conv3DRelu(32, 1, kernel_size=(1, 3, 3), stride=(1, 1, 1))
+        self.activation  =  Conv3DSigmoid(32,  1, kernel_size=(1, 3, 3), stride=(1, 1, 1))
         
         
     #----------------------------------------------------------------------------------------

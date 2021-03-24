@@ -4,6 +4,24 @@ import tensorflow   as tf
 from Model.ConvLstm import ConvLSTM
 
 #----------------------------------------------------------------------------------------
+# Conv3DSigmoid
+#----------------------------------------------------------------------------------------
+      
+class Conv3DSigmoid(nn.Module):
+    """Convolution 3D with activation relu"""
+
+    def __init__(self, in_channels, out_channels, kernel_size=(1, 3, 3), stride=(1, 1, 1)):
+        super().__init__()
+        padding      = (kernel_size[0]//2, kernel_size[1]//2, kernel_size[2]//2)
+        self.conv3d  = nn.Conv3d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding)
+        self.sigmoid = nn.Sigmoid()
+        
+    def forward(self, input_tensor) :
+        x = self.conv3d(input_tensor)
+        x = self.sigmoid(x)
+        return x
+    
+#----------------------------------------------------------------------------------------
 # Conv3DRelu
 #----------------------------------------------------------------------------------------
       
@@ -12,7 +30,7 @@ class Conv3DRelu(nn.Module):
 
     def __init__(self, in_channels, out_channels, kernel_size=(1, 3, 3), stride=(1, 2, 2)):
         super().__init__()
-        padding = (kernel_size[0]//2, kernel_size[1]//2, kernel_size[2]//2)
+        padding     = (kernel_size[0]//2, kernel_size[1]//2, kernel_size[2]//2)
         self.conv3d = nn.Conv3d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding)
         self.relu   = nn.ReLU()
         
@@ -21,7 +39,6 @@ class Conv3DRelu(nn.Module):
         x = self.relu(x)
         return x
     
-
 
 #----------------------------------------------------------------------------------------
 # ConvLstm2DRelu

@@ -8,6 +8,7 @@ class Main():
         super().__init__()
         logging.getLogger('tensorflow').setLevel(logging.ERROR)
         
+        
     #----------------------------------------------------------------------------------------
     # Function to train the model
     #----------------------------------------------------------------------------------------
@@ -15,6 +16,11 @@ class Main():
     def train(self):
         self.model = ModelTrain(init)
         self.model.execute()
+    
+    
+    #----------------------------------------------------------------------------------------
+    # Function to save to tensorboard the model and a sample of the dataset
+    #----------------------------------------------------------------------------------------
     
     def saveTrainData(self):
         self.model = ModelTrain(init)

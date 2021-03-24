@@ -9,7 +9,8 @@ from keras.preprocessing import image as kImage
 class GenerateData(Dataset):
     
     def __init__(
-                     self, dataset_gt_dir, 
+                     self, 
+                     dataset_gt_dir, 
                      dataset_dir, 
                      framesBack, 
                      trainStart, 
@@ -17,7 +18,8 @@ class GenerateData(Dataset):
                      transform=None, 
                      data_format='channels_last',
                      void_value = True,
-                     showSample = False
+                     showSample = False,
+                     resize = False
                  ):
         """
         Args:
@@ -36,11 +38,12 @@ class GenerateData(Dataset):
         self.data_format = data_format
         
         self.framesBack = framesBack
+        self.resize     = resize
         self.trainStart = trainStart
-        self.trainEnd = trainEnd
+        self.trainEnd   = trainEnd
         self.void_label = -1.
         self.void_value = void_value
-        self.dataset = self.generate()
+        self.dataset    = self.generate()
         
         if(showSample):
             ## plot the intermediate frame to qualitatively validate our trainset
@@ -98,9 +101,10 @@ class GenerateData(Dataset):
         X_list = sorted(X_list)
         Y_list = sorted(Y_list)
         
-        #Solo quedarme con las imagenes comprendidas en el intervalo trainStart - trainEnd
-        X_list = X_list[self.trainStart:self.trainEnd]
-        Y_list = Y_list[self.trainStart:self.trainEnd]
+        if(self.resize == True):
+            #Solo quedarme con las imagenes comprendidas en el intervalo trainStart - trainEnd
+            X_list = X_list[self.trainStart:self.trainEnd]
+            Y_list = Y_list[self.trainStart:self.trainEnd]
         
         # load training data
         self.X = self.loadImages(X_list)

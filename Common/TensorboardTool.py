@@ -69,12 +69,12 @@ class TensorBoardTool:
         file_writer.close()
 
     #----------------------------------------------------------------------------------------
-    # Use tensorboard to save sample data
+    # Use tensorboard to add scalars
     #----------------------------------------------------------------------------------------
     
-    def saveTrainLoss(self, name_folder, tag, loss, step):    
+    def add_scalar(self, name_folder, tag, loss, step, comment=''):    
         if(self.file_writer == None):
-            self.file_writer = SummaryWriter(self.logdir + '/' + name_folder)
+            self.file_writer = SummaryWriter(self.logdir + '/' + name_folder, comment = comment)
             
         self.file_writer.add_scalar( tag, loss, step)
         
