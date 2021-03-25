@@ -2,7 +2,7 @@ import torch
 import os
 from datetime import datetime
 
-class Init(object):
+class Settings(object):
     
     def __init__(self):
         super().__init__()
@@ -18,7 +18,7 @@ class Init(object):
         
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~ settings model ~~~~~~~~~~~~~~~~~~~~~~~~~~~
         
-        self.model_name         = 'AtentionUnetLSTM_model'
+        self.model_name         = 'Model_M3_2D_nuevo'
         self.up_mode            = 'base'
         self.n_channels         = 3
         self.p_dropout          = 0.2
@@ -28,7 +28,7 @@ class Init(object):
         self.epochs             = 50
         self.batch_size         = 5
         self.shuffle            = False
-        self.train_result_dir   = os.path.join('TrainResult','Model_M3_2D')
+        self.train_result_dir   = os.path.join('TrainResult',self.model_name)
 
         # optimizer
         self.beta_a             = 0.9

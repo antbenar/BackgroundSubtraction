@@ -15,21 +15,21 @@ from torch.utils.tensorboard             import SummaryWriter
 
 
 class ModelTrain(nn.Module):
-    def __init__(self, init):
+    def __init__(self, settings):
         super().__init__()
-        self.init = init
+        self.settings = settings
         
         # model static attributes
-        self.n_channels = init.n_channels
-        self.p_dropout = init.p_dropout
-        self.device = init.device
+        self.n_channels = settings.n_channels
+        self.p_dropout = settings.p_dropout
+        self.device = settings.device
         self._state    = {}
         
         # instance the model
         self.net = Net(
             self.n_channels, 
             self.p_dropout, 
-            up_mode= self.init.up_mode
+            up_mode= self.settings.up_mode
         )
         # net to device
         self.net.to(self.device)
@@ -37,8 +37,8 @@ class ModelTrain(nn.Module):
         #optimizer
         self.optimizer    = torch.optim.Adam(
                                 self.net.parameters(),
-                                lr=self.init.lr,
-                                betas=(self.init.beta_a, self.init.beta_b)
+                                lr=self.settings.lr,
+                                betas=(self.settings.beta_a, self.settings.beta_b)
                             )
 
         # set lost
@@ -55,7 +55,7 @@ class ModelTrain(nn.Module):
         self._state[name]=attr
     def _state_save(self,epoch):
         # Save model
-        pathMod = os.path.join(self.init.train_result_dir, 'mdl_' + self.category + '_' + self.scene + str(epoch) + '.pth')
+        pathMod = os.path.join(self.settings.train_result_dir, 'mdl_' + self.category + '_' + self.scene + str(epoch) + '.pth')
         torch.save( self._state, pathMod)
      
     #----------------------------------------------------------------------------------------
@@ -88,7 +88,7 @@ class ModelTrain(nn.Module):
     #----------------------------------------------------------------------------------------
 
     def _metrics(self, prediction, groundtruth):
-        if(self.init.framesBack > 0):
+        if(self.settings.framesBack > 0):
             # (b, c, t, h, w) -> (t, b, h, w, c) -> get first frame of the sequence of frames
             prediction  = prediction.permute(2, 0, 3, 4, 1)[0]
             groundtruth = groundtruth.permute(2, 0, 3, 4, 1)[0]
@@ -98,7 +98,7 @@ class ModelTrain(nn.Module):
             groundtruth = groundtruth.permute(0, 2, 3, 1)
         
         
-        prediction  = self._threshold(prediction, self.init.threshold)
+        prediction  = self._threshold(prediction, self.settings.threshold)
 
         FP = torch.sum((prediction == 1) & (groundtruth == 0)).data.cpu().numpy()
         FN = torch.sum((prediction == 0) & (groundtruth == 1)).data.cpu().numpy()
@@ -141,7 +141,7 @@ class ModelTrain(nn.Module):
             # print statistics every num_stat_batches
             runtime_loss = loss.item()
             running_loss += runtime_loss
-            view_batch = self.init.view_batch
+            view_batch = self.settings.view_batch
             
             if (i_batch+1) % view_batch == 0:  # print every 2000 mini-batches
                 print('[%d, %5d] loss: %.3f' %
@@ -184,7 +184,7 @@ class ModelTrain(nn.Module):
             # print statistics every num_stat_batches
             runtime_loss  = loss.item()
             running_loss += runtime_loss
-            view_batch = self.init.view_batch
+            view_batch = self.settings.view_batch
             
             if (i_batch+1) % view_batch == 0:  # print every 2000 mini-batches
                 print('[%d, %5d] loss: %.3f' %
@@ -208,13 +208,13 @@ class ModelTrain(nn.Module):
         
     def execute(self):
         
-        print('~~~~~~~~~~~~~~ Current method >>> ' + self.init.model_name)
+        print('~~~~~~~~~~~~~~ Current method >>> ' + self.settings.model_name)
         
-        if not os.path.exists(self.init.train_result_dir):
-            os.makedirs(self.init.train_result_dir)
+        if not os.path.exists(self.settings.train_result_dir):
+            os.makedirs(self.settings.train_result_dir)
                 
         # Go through each scene
-        for category, scene_list in self.init.dataset.items():     
+        for category, scene_list in self.settings.dataset.items():     
             for scene in scene_list: 
                 self.category = category
                 self.scene    = scene
@@ -223,16 +223,16 @@ class ModelTrain(nn.Module):
                 
                 print("~~~~~~~ Generating data ->>> " + category + " / " + scene + " ~~~~~~~~~~")
 
-                dataset_dir = os.path.join(self.init.dataset_dir, category, scene, 'input')
-                dataset_gt_dir = os.path.join(self.init.dataset_dir, category, scene, 'groundtruth')
+                dataset_dir = os.path.join(self.settings.dataset_dir, category, scene, 'input')
+                dataset_gt_dir = os.path.join(self.settings.dataset_dir, category, scene, 'groundtruth')
                 
                 dataset = GenerateData(
                     dataset_gt_dir, dataset_dir,
-                    framesBack  = self.init.framesBack,
-                    trainStart  = self.init.trainStart,
-                    trainEnd    = self.init.trainEnd,
-                    data_format = self.init.data_format,
-                    resize      = self.init.resize,
+                    framesBack  = self.settings.framesBack,
+                    trainStart  = self.settings.trainStart,
+                    trainEnd    = self.settings.trainEnd,
+                    data_format = self.settings.data_format,
+                    resize      = self.settings.resize,
                     showSample  = True
                 )
                 
@@ -242,10 +242,10 @@ class ModelTrain(nn.Module):
                 #~~~~~~~~~~~~~~~~~~~~~ Train net for this scene ~~~~~~~~~~~~~~~~~~~~~
                 
                 print("~~~~~~~ Training ->>> " + category + " / " + scene + " ~~~~~~~~~~")
-                #TensorBoardTool(self.init.logdir).run()
-                tb = SummaryWriter(self.init.logdir)
+                #TensorBoardTool(self.settings.logdir).run()
+                tb = SummaryWriter(self.settings.logdir)
                 
-                for epoch in range(self.init.epochs):  # loop over the dataset multiple times
+                for epoch in range(self.settings.epochs):  # loop over the dataset multiple times
                     print("Epoch = ", epoch, "-"*40)
                     
                     lossTrain       =      self._train(epoch, train_loader)
@@ -258,7 +258,7 @@ class ModelTrain(nn.Module):
                     tb.add_scalar('Metrics/PWC'       , metr[1]  , epoch)
                     
                     # Save checkpoint
-                    if epoch%2 == 0 or epoch == (self.init.epochs -1):
+                    if epoch%2 == 0 or epoch == (self.settings.epochs -1):
                         self._state_add (     'epoch',                    epoch  )
                         self._state_add ('state_dict',self.      net.state_dict())
                         self._state_add ( 'optimizer',self.optimizer.state_dict())
@@ -273,9 +273,9 @@ class ModelTrain(nn.Module):
     #----------------------------------------------------------------------------------------
         
     def train_val_test_split(self, dataset):
-        train_split_  = self.init.train_split
-        val_split_    = self.init.val_split
-        shuffle       = self.init.shuffle
+        train_split_  = self.settings.train_split
+        val_split_    = self.settings.val_split
+        shuffle       = self.settings.shuffle
         
         dataset_size = len(dataset)
         indices      = list(range(dataset_size))
@@ -297,25 +297,25 @@ class ModelTrain(nn.Module):
                 
         train_loader = torch.utils.data.DataLoader(
                             dataset, 
-                            batch_size  = self.init.batch_size, 
-                            shuffle     = self.init.shuffle, 
-                            num_workers = self.init.num_workers,
+                            batch_size  = self.settings.batch_size, 
+                            shuffle     = self.settings.shuffle, 
+                            num_workers = self.settings.num_workers,
                             sampler     = train_sampler
                         )
         
         val_loader = torch.utils.data.DataLoader(
                             dataset, 
-                            batch_size  = self.init.batch_size, 
-                            shuffle     = self.init.shuffle, 
-                            num_workers = self.init.num_workers,
+                            batch_size  = self.settings.batch_size, 
+                            shuffle     = self.settings.shuffle, 
+                            num_workers = self.settings.num_workers,
                             sampler     = valid_sampler
                         )
         
         test_loader = torch.utils.data.DataLoader(
                             dataset, 
-                            batch_size  = self.init.batch_size, 
-                            shuffle     = self.init.shuffle, 
-                            num_workers = self.init.num_workers,
+                            batch_size  = self.settings.batch_size, 
+                            shuffle     = self.settings.shuffle, 
+                            num_workers = self.settings.num_workers,
                             sampler     = test_sampler
                         )
 
@@ -328,36 +328,37 @@ class ModelTrain(nn.Module):
         
     def saveTrainData(self):
         # Go through each scene
-        for category, scene_list in self.init.dataset.items():     
+        for category, scene_list in self.settings.dataset.items():     
             for scene in scene_list: 
                 
                 #~~~~~~~~~~~~~~~~~~~~~ Load dataset for this scene ~~~~~~~~~~~~~~~~~~~~~
                 
                 print("~~~~~~~ Generating data ->>> " + category + " / " + scene + " ~~~~~~~~~~")
 
-                dataset_dir = os.path.join(self.init.dataset_dir, category, scene, 'input')
-                dataset_gt_dir = os.path.join(self.init.dataset_dir, category, scene, 'groundtruth')
+                dataset_dir = os.path.join(self.settings.dataset_dir, category, scene, 'input')
+                dataset_gt_dir = os.path.join(self.settings.dataset_dir, category, scene, 'groundtruth')
                 
                 trainset = GenerateData(
                     dataset_gt_dir, dataset_dir,
-                    framesBack=self.init.framesBack,
-                    trainStart=self.init.trainStart,
-                    trainEnd=self.init.trainEnd,
-                    data_format=self.init.data_format,
-                    resize      = self.init.resize,
+                    framesBack=self.settings.framesBack,
+                    trainStart=self.settings.trainStart,
+                    trainEnd=self.settings.trainEnd,
+                    data_format=self.settings.data_format,
+                    resize      = self.settings.resize,
                     void_value = False,
                     showSample = True
                 )
                 
                 trainloader = torch.utils.data.DataLoader(
                     trainset, 
-                    batch_size=self.init.batch_size, 
-                    shuffle=self.init.shuffle, 
-                    num_workers=self.init.num_workers
+                    batch_size=self.settings.batch_size, 
+                    shuffle=self.settings.shuffle, 
+                    num_workers=self.settings.num_workers
                 )
                 
                 # Save to tensorboard
-                tensorBoardTool = TensorBoardTool(self.init.logdir)
+                dim5D = self.settings.framesBack > 0
+                tensorBoardTool = TensorBoardTool(self.settings.logdir, dim5D)
                 idx = len(trainloader)//2
                 tensorBoardTool.saveDataloader(trainloader, idx)
                 tensorBoardTool.saveNet(self.net, trainloader, self.device)
@@ -369,32 +370,32 @@ class ModelTrain(nn.Module):
         
     def calculateModelSize(self):
         # Go through each scene
-        for category, scene_list in self.init.dataset.items():     
+        for category, scene_list in self.settings.dataset.items():     
             for scene in scene_list: 
                 
                 #~~~~~~~~~~~~~~~~~~~~~ Load dataset for this scene ~~~~~~~~~~~~~~~~~~~~~
                 
                 print("~~~~~~~ Generating data ->>> " + category + " / " + scene + " ~~~~~~~~~~")
 
-                dataset_dir = os.path.join(self.init.dataset_dir, category, scene, 'input')
-                dataset_gt_dir = os.path.join(self.init.dataset_dir, category, scene, 'groundtruth')
+                dataset_dir = os.path.join(self.settings.dataset_dir, category, scene, 'input')
+                dataset_gt_dir = os.path.join(self.settings.dataset_dir, category, scene, 'groundtruth')
                 
                 trainset = GenerateData(
                     dataset_gt_dir, dataset_dir,
-                    framesBack=self.init.framesBack,
-                    trainStart=self.init.trainStart,
-                    trainEnd=self.init.trainEnd,
-                    data_format=self.init.data_format,
-                    resize      = self.init.resize,
+                    framesBack=self.settings.framesBack,
+                    trainStart=self.settings.trainStart,
+                    trainEnd=self.settings.trainEnd,
+                    data_format=self.settings.data_format,
+                    resize      = self.settings.resize,
                     void_value = False,
                     showSample = True
                 )
                 
                 trainloader = torch.utils.data.DataLoader(
                     trainset, 
-                    batch_size=self.init.batch_size, 
-                    shuffle=self.init.shuffle, 
-                    num_workers=self.init.num_workers
+                    batch_size=self.settings.batch_size, 
+                    shuffle=self.settings.shuffle, 
+                    num_workers=self.settings.num_workers
                 )
                 _, sample_batched = next(iter(enumerate(trainloader)))
                 inputs      = sample_batched['inputs']

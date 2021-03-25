@@ -59,7 +59,7 @@ class ModelSize():
         
         inp_param = (self.input_bytes + self.parameter_bytes)
         total = (inp_param  + self.interm_variables_bits)/1000
-        print('Total + int:',total , 'Gb')
+        print('Total:',total , 'Gb')
         
     def calculateInput(self): 
         inputs = torch.tensor(self.input.size())
@@ -105,24 +105,31 @@ class ModelSize():
             #print("="*40,m)
             #print(input_.size())
 
-            if isinstance(m, nn.Conv3d) or isinstance(m, nn.ConvTranspose3d):
+            if (isinstance(m, nn.Conv3d) or isinstance(m, nn.ConvTranspose3d)or
+                isinstance(m, nn.ConvTranspose2d)):
                 input_size = torch.tensor(input_.size())
                 input_size[1] = m.in_channels
                 input_size = torch.Size(input_size.tolist())            
                 input_ = Variable(torch.FloatTensor(input_size))
                 
-            elif isinstance(m, nn.BatchNorm3d):
+            elif isinstance(m, nn.BatchNorm3d) or isinstance(m, nn.BatchNorm2d):
                 input_size = torch.tensor(input_.size())
                 input_size[1] = m.num_features
                 input_size = torch.Size(input_size.tolist())            
                 input_ = Variable(torch.FloatTensor(input_size))
                 
             elif isinstance(m, nn.Conv2d):
-                input_size = torch.tensor(torch.Size([5, 16, 30, 40]))
-                input_size[1] = m.in_channels
-                input_size = torch.Size(input_size.tolist())     
-                input_ = Variable(torch.FloatTensor(input_size))
-                conv2DVal = True
+                if(len(self.input.size()) == 4):
+                    input_size = torch.tensor(input_.size())
+                    input_size[1] = m.in_channels
+                    input_size = torch.Size(input_size.tolist())            
+                    input_ = Variable(torch.FloatTensor(input_size))
+                else:
+                    input_size = torch.tensor(torch.Size([5, 16, 30, 40]))
+                    input_size[1] = m.in_channels
+                    input_size = torch.Size(input_size.tolist())     
+                    input_ = Variable(torch.FloatTensor(input_size))
+                    conv2DVal = True
             elif isinstance(m, nn.ReLU) and conv2DVal:
                 input_size = torch.tensor(torch.Size([5, 16, 5, 30, 40]))
                 input_size = torch.Size(input_size.tolist())     

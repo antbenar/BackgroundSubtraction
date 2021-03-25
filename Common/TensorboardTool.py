@@ -9,10 +9,10 @@ from torch.utils.tensorboard  import SummaryWriter
 
 class TensorBoardTool:
 
-    def __init__(self, logdir, file_writer = None):
+    def __init__(self, logdir, dim5D, file_writer = None):
         self.logdir = logdir
         self.file_writer = file_writer
-        
+        self.dim5D  = dim5D
     #----------------------------------------------------------------------------------------
     # Run - Start tensorboard server
     # or in console run -> tensorboard --logdir=logs/train_data/
@@ -39,15 +39,19 @@ class TensorBoardTool:
                 break
             
         input, gt_tensor = sample['inputs'], sample['gt']
-        print(input.size())
-        # (b, c, t, h, w) -> (t, b, h, w, c)
-        input_tensor = input.permute(2, 0, 3, 4, 1)[0]
-        gt_tensor = gt_tensor.permute(2, 0, 3, 4, 1)[0]
-        print(input_tensor.size())
+
+        if (self.dim5D):    
+            # (b, c, t, h, w) -> (t, b, h, w, c)
+            input_tensor = input.permute (2, 0, 3, 4, 1)[0]
+            gt_tensor = gt_tensor.permute(2, 0, 3, 4, 1)[0]
+        else:
+            # (b, c, h, w) -> (b, h, w, c)
+            input_tensor = input.permute (0, 2, 3, 1)
+            gt_tensor = gt_tensor.permute(0, 2, 3, 1)
+
         # normalize image
         input_tensor = torch.div(input_tensor, 255)
         gt_tensor = torch.div(gt_tensor, 255)
-        print(input_tensor.size())
         
         file_writer = SummaryWriter(self.logdir + '/Sample_data')
         file_writer.add_images("Groundtruth images", gt_tensor,  dataformats='NHWC')

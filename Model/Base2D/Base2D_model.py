@@ -6,7 +6,7 @@ from .Base2D_parts import Up2D_2
 from .Base2D_parts import Conv2DSigmoid
 
 class Net(nn.Module):
-    def __init__(self, n_channels, p_dropout=0.2):
+    def __init__(self, n_channels, p_dropout=0.2, up_mode=None):
         super(Net, self).__init__()
         
         self.n_channels = n_channels
