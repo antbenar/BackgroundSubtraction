@@ -3,10 +3,13 @@ import torch
 import torch.nn              as nn
 import numpy                 as np
 import torch.nn.functional   as F
-from Model.model                         import Net
+from Model.Base_model                    import Net
+#from Model.Base2D.Base2D_model           import Net
+#from Model.Unet2D.Unet2D_model           import Net
 from Dataset.generateData                import GenerateData
 from Common.TensorboardTool              import TensorBoardTool
 from Common.Util                         import Averager
+from Common.Util                         import ModelSize
 from torch.utils.data.sampler            import SubsetRandomSampler
 from torch.utils.tensorboard             import SummaryWriter
 
@@ -25,16 +28,20 @@ class ModelTrain(nn.Module):
         # instance the model
         self.net = Net(
             self.n_channels, 
-            self.p_dropout
+            self.p_dropout, 
+            up_mode= self.init.up_mode
         )
         # net to device
         self.net.to(self.device)
         
         #optimizer
-        self.optimizer    = torch.optim.Adam(self.net.parameters(), lr=self.init.lr, betas=(self.init.beta_a, self.init.beta_b))
+        self.optimizer    = torch.optim.Adam(
+                                self.net.parameters(),
+                                lr=self.init.lr,
+                                betas=(self.init.beta_a, self.init.beta_b)
+                            )
 
         # set lost
-        #self.criterion_loss = nn.MSELoss(reduction='sum')
         self.criterion_loss = self._bce_loss
         
         
@@ -81,9 +88,16 @@ class ModelTrain(nn.Module):
     #----------------------------------------------------------------------------------------
 
     def _metrics(self, prediction, groundtruth):
-        # (b, c, t, h, w) -> (t, b, h, w, c)
-        prediction  = prediction.permute(2, 0, 3, 4, 1)[0]
-        groundtruth = groundtruth.permute(2, 0, 3, 4, 1)[0]
+        if(self.init.framesBack > 0):
+            # (b, c, t, h, w) -> (t, b, h, w, c) -> get first frame of the sequence of frames
+            prediction  = prediction.permute(2, 0, 3, 4, 1)[0]
+            groundtruth = groundtruth.permute(2, 0, 3, 4, 1)[0]
+        else :
+            # (b, c, h, w) -> (b, h, w, c)
+            prediction  = prediction.permute(0, 2, 3, 1)
+            groundtruth = groundtruth.permute(0, 2, 3, 1)
+        
+        
         prediction  = self._threshold(prediction, self.init.threshold)
 
         FP = torch.sum((prediction == 1) & (groundtruth == 0)).data.cpu().numpy()
@@ -244,7 +258,7 @@ class ModelTrain(nn.Module):
                     tb.add_scalar('Metrics/PWC'       , metr[1]  , epoch)
                     
                     # Save checkpoint
-                    if epoch%2 == 0:
+                    if epoch%2 == 0 or epoch == (self.init.epochs -1):
                         self._state_add (     'epoch',                    epoch  )
                         self._state_add ('state_dict',self.      net.state_dict())
                         self._state_add ( 'optimizer',self.optimizer.state_dict())
@@ -261,27 +275,26 @@ class ModelTrain(nn.Module):
     def train_val_test_split(self, dataset):
         train_split_  = self.init.train_split
         val_split_    = self.init.val_split
-        shuffle      = self.init.shuffle
+        shuffle       = self.init.shuffle
         
         dataset_size = len(dataset)
         indices      = list(range(dataset_size))
         train_split  = int(np.floor(train_split_ * dataset_size))                # obtain the number of train samples
-        val_split   = int(np.floor(train_split_ * val_split_ * dataset_size))    # obtain the number of val samples
+        val_split    = int(np.floor(train_split_ * val_split_ * dataset_size))   # obtain the number of val samples
         train_split  = train_split - val_split                                   # obtain the position where the train samples end
         val_split    = train_split + 2*val_split                                 # obtain the position where the val samples end
-        
         
         if shuffle :
             np.random.seed(1234)
             np.random.shuffle(indices)
             
         train_indices, val_indices, test_indices = indices[:train_split], indices[train_split:val_split], indices[val_split:]
-        
+
         # Creating PT data samplers and loaders:
         train_sampler  = SubsetRandomSampler(train_indices)
         valid_sampler  = SubsetRandomSampler(val_indices)
         test_sampler   = SubsetRandomSampler(test_indices)
-        
+                
         train_loader = torch.utils.data.DataLoader(
                             dataset, 
                             batch_size  = self.init.batch_size, 
@@ -305,7 +318,7 @@ class ModelTrain(nn.Module):
                             num_workers = self.init.num_workers,
                             sampler     = test_sampler
                         )
-        
+
         return train_loader, val_loader, test_loader
     
     
@@ -331,6 +344,7 @@ class ModelTrain(nn.Module):
                     trainStart=self.init.trainStart,
                     trainEnd=self.init.trainEnd,
                     data_format=self.init.data_format,
+                    resize      = self.init.resize,
                     void_value = False,
                     showSample = True
                 )
@@ -344,12 +358,51 @@ class ModelTrain(nn.Module):
                 
                 # Save to tensorboard
                 tensorBoardTool = TensorBoardTool(self.init.logdir)
-                idx = (self.init.trainEnd - self.init.trainStart)//2
+                idx = len(trainloader)//2
                 tensorBoardTool.saveDataloader(trainloader, idx)
                 tensorBoardTool.saveNet(self.net, trainloader, self.device)
-                tensorBoardTool.run()
+                #tensorBoardTool.run()
                 
+    #----------------------------------------------------------------------------------------
+    # Function to calculate memory on the model
+    #----------------------------------------------------------------------------------------
         
+    def calculateModelSize(self):
+        # Go through each scene
+        for category, scene_list in self.init.dataset.items():     
+            for scene in scene_list: 
+                
+                #~~~~~~~~~~~~~~~~~~~~~ Load dataset for this scene ~~~~~~~~~~~~~~~~~~~~~
+                
+                print("~~~~~~~ Generating data ->>> " + category + " / " + scene + " ~~~~~~~~~~")
+
+                dataset_dir = os.path.join(self.init.dataset_dir, category, scene, 'input')
+                dataset_gt_dir = os.path.join(self.init.dataset_dir, category, scene, 'groundtruth')
+                
+                trainset = GenerateData(
+                    dataset_gt_dir, dataset_dir,
+                    framesBack=self.init.framesBack,
+                    trainStart=self.init.trainStart,
+                    trainEnd=self.init.trainEnd,
+                    data_format=self.init.data_format,
+                    resize      = self.init.resize,
+                    void_value = False,
+                    showSample = True
+                )
+                
+                trainloader = torch.utils.data.DataLoader(
+                    trainset, 
+                    batch_size=self.init.batch_size, 
+                    shuffle=self.init.shuffle, 
+                    num_workers=self.init.num_workers
+                )
+                _, sample_batched = next(iter(enumerate(trainloader)))
+                inputs      = sample_batched['inputs']
+                ModelSize(inputs, self.net, self.device)
+                
+                return;
+
+                
     #----------------------------------------------------------------------------------------
     # Function to print a summary of the network
     #----------------------------------------------------------------------------------------

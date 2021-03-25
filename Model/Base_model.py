@@ -1,14 +1,16 @@
 import torch.nn as nn
-#from parts      import Attention
-from Model.parts import Conv3DRelu
-from Model.parts import ConvLstm2DRelu
-from Model.parts import EndecBlock
-from Model.parts import Up
-from Model.parts import Up2
-from Model.parts import Conv3DSigmoid
+#from Base_parts      import Attention
+from Model.Base_parts import Conv3DRelu
+from Model.Base_parts import ConvLstm2DRelu
+from Model.Base_parts import EndecBlock
+from Model.Base_parts import UpM1
+from Model.Base_parts import UpM2
+from Model.Base_parts import UpM3
+from Model.Base_parts import Up2
+from Model.Base_parts import Conv3DSigmoid
 
 class Net(nn.Module):
-    def __init__(self, n_channels, p_dropout=0.2):
+    def __init__(self, n_channels, p_dropout=0.2, up_mode='base'):
         super(Net, self).__init__()
         
         self.n_channels = n_channels
@@ -31,14 +33,24 @@ class Net(nn.Module):
         
         #~~~~~~~~~~~~~~~~~~~ Decoder ~~~~~~~~~~~~~~~~~~~~~~
         
-        #BlockDec 1
-        self.upBlock1    =             Up(16, 64, kernel_size_convT=(3, 3, 3), stride_convT=(1, 1, 1), padding_convT=(1,1,1))
-        #BlockDec 2
-        self.upBlock2    =             Up(64, 64)
-        #BlockDec 3
-        self.upBlock3    =             Up(64, 64)
-        #BlockDec 4
-        self.upBlock4    =            Up2(64, 32, p_dropout)
+        if(up_mode == 'base'):
+            self.upBlock1    =         UpM1(16, 64, kernel_size_convT=(3, 3, 3), stride_convT=(1, 1, 1), padding_convT=(1,1,1))
+            self.upBlock2    =         UpM1(64, 64)
+            self.upBlock3    =         UpM1(64, 64)
+            self.upBlock4    =          Up2(64, 32, p_dropout)    
+        elif(up_mode == 'M2'):
+            self.upBlock1    =         UpM2(16, 32, kernel_size_convT=(3, 3, 3), stride_convT=(1, 1, 1), padding_convT=(1,1,1))
+            self.upBlock2    =         UpM2(32, 32)
+            self.upBlock3    =         UpM2(32, 32)
+            self.upBlock4    =          Up2(32, 32, p_dropout)    
+        # elif(up_mode == 'M3'):
+        #     self.upBlock1    =         UpM3(16, 64, kernel_size_convT=(3, 3, 3), stride_convT=(1, 1, 1), padding_convT=(1,1,1))
+        #     self.upBlock2    =         UpM3(64, 64)
+        #     self.upBlock3    =         UpM3(64, 64)
+        #     self.upBlock4    =          Up2(64, 32, p_dropout)    
+        else:
+            raise NotImplementedError('Unknown operation function.')
+        
         
         self.activation  =  Conv3DSigmoid(32,  1, kernel_size=(1, 3, 3), stride=(1, 1, 1))
         

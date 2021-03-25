@@ -39,15 +39,15 @@ class TensorBoardTool:
                 break
             
         input, gt_tensor = sample['inputs'], sample['gt']
-        
+        print(input.size())
         # (b, c, t, h, w) -> (t, b, h, w, c)
         input_tensor = input.permute(2, 0, 3, 4, 1)[0]
         gt_tensor = gt_tensor.permute(2, 0, 3, 4, 1)[0]
-        
+        print(input_tensor.size())
         # normalize image
         input_tensor = torch.div(input_tensor, 255)
         gt_tensor = torch.div(gt_tensor, 255)
-        
+        print(input_tensor.size())
         
         file_writer = SummaryWriter(self.logdir + '/Sample_data')
         file_writer.add_images("Groundtruth images", gt_tensor,  dataformats='NHWC')

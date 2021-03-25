@@ -25,7 +25,7 @@ class GenerateData(Dataset):
         Args:
             dataset_gt_dir (string): Path to the input dir.
             dataset_dir (string): Path to the groundtruth dir.
-            framesBack (int): Number of frames_back in out temporal subsets
+            framesBack (int): Number of frames_back in out temporal subsets, if It is 0, the datase only will be a4D tensor (BHWC)
             trainStart (int): Index of the first element to take into our data set
             trainEnd (int): Index of the last element to take into our data set
             transform: Null
@@ -112,14 +112,16 @@ class GenerateData(Dataset):
         
         
         #Given a sequence of frames, divide in groups of five consecutive frames
-        self.X = self.make_5d(self.X)
-        self.Y = self.make_5d(self.Y)
+        if (self.framesBack > 0):    
+            self.X = self.make_5d(self.X)
+            self.Y = self.make_5d(self.Y)
         
-        if (self.data_format=='channels_last'):    
-            #  move chanels to the front of the tensor
+        
+        if (self.data_format== 'channels_last'):    
+            #  move chanels to the front of the tensor (B, T, H, W, C) -> (B, C, T, H, W)
             self.X = np.moveaxis(self.X, -1, 1)
             self.Y = np.moveaxis(self.Y, -1, 1)
-        
+                
         return [self.X, self.Y]
     
     
@@ -198,7 +200,7 @@ class GenerateData(Dataset):
         print('Gt shape', self.dataset[1].shape)
         
         inputs, gt = self.dataset[0][idx_frame], self.dataset[1][idx_frame]
-        
+
         if (self.data_format=='channels_last'):
             inputs = np.moveaxis(inputs, 0, -1)
             gt = np.moveaxis(gt, 0, -1)
@@ -206,23 +208,28 @@ class GenerateData(Dataset):
         # change -1 to a gray color
         if(self.void_value):
             shape = gt.shape
-            gt/=255.0
-            gt = gt.reshape(-1)
-            idx = np.where(gt==-1)[0] # find non-ROI
+            gt   /=255.0
+            gt    = gt.reshape(-1)
+            idx   = np.where(gt==-1)[0] # find non-ROI
             if (len(idx)>0):
                 gt[idx] = 0.55
             gt = gt.reshape(shape)
     
+        # if there is an stack of frames, get the first frame
+        if (self.framesBack > 0):   
+            inputs = inputs[0]
+            gt     = gt[0]
+            
         ax = plt.subplot(1, 2, 1)
         ax.set_title('Input #{}'.format(idx_frame))
         ax.axis('off')
-        plt.imshow(inputs[0]/255)
+        plt.imshow(inputs/255)
         plt.tight_layout()
         
         ax2 = plt.subplot(1, 2, 2)
         ax2.set_title('Gt #{}'.format(idx_frame))
         ax2.axis('off')
-        plt.imshow(gt[0], cmap=plt.get_cmap('gray'))
+        plt.imshow(gt, cmap=plt.get_cmap('gray'))
         plt.tight_layout()
 
         plt.show()

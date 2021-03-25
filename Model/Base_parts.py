@@ -1,6 +1,5 @@
 import torch
 import torch.nn     as nn
-import tensorflow   as tf
 from Model.ConvLstm import ConvLSTM
 
 #----------------------------------------------------------------------------------------
@@ -87,7 +86,7 @@ class EndecBlock(nn.Module):
         self.convTranspose3d    = nn.ConvTranspose3d(in_channels=32, out_channels=16, kernel_size=(3, 4, 4), stride=(1, 2, 2), padding=(1,1,1))
         #self.convTranspose3d    = nn.ConvTranspose3d(in_channels=32, out_channels=16, kernel_size=(2, 3, 3), stride=(1, 2, 2), padding=(1,2,1))
 
-        self.batchNormalization = nn.BatchNorm3d(self.channels_concat)
+        self.batchNormalization = nn.BatchNorm3d(num_features=self.channels_concat)
         self.conv3DRelu2        = Conv3DRelu(self.channels_concat, out_channels=out_channels, kernel_size=(1, 3, 3), stride=(1, 1, 1))
 
     def forward(self, input_tensor) :
@@ -126,12 +125,15 @@ class Attention(nn.Module):
         #print("tensor - x = ",x.size())
         return x
     
-    
+#----------------------------------------------------------------------------------------
+# PARTS OF THE UPSAMPLING OF THE MODEL 1
+#----------------------------------------------------------------------------------------
+
 #----------------------------------------------------------------------------------------
 # Up 
 #----------------------------------------------------------------------------------------
 
-class Up(nn.Module):
+class UpM1(nn.Module):
     """Blocks of decoder"""
 
     def __init__(self, in_channels=64,  out_channels=64, kernel_size_convT=(3, 2, 2), stride_convT=(1, 2, 2), padding_convT=(1,0,0)):
@@ -186,3 +188,68 @@ class Up2(nn.Module):
         x = self.relu(x)
         x = self.dropout(x)
         return x
+    
+    
+    
+#----------------------------------------------------------------------------------------
+# PARTS OF THE UPSAMPLING OF THE MODEL 2
+#----------------------------------------------------------------------------------------
+
+#----------------------------------------------------------------------------------------
+# Up 
+# --- PARTS OF THE UPSAMPLING OF THE MODEL 2
+#----------------------------------------------------------------------------------------    
+    
+class UpM2(nn.Module):
+    """Blocks of decoder"""
+
+    def __init__(self, in_channels=32,  out_channels=32, kernel_size_convT=(3, 2, 2), stride_convT=(1, 2, 2), padding_convT=(1,0,0)):
+        super().__init__()
+        self.convTranspose3d    = nn.ConvTranspose3d(in_channels=in_channels, out_channels=16, kernel_size=kernel_size_convT, stride=stride_convT, padding=padding_convT)
+        #self.convTranspose3d    = nn.ConvTranspose3d(in_channels=in_channels, out_channels=16, kernel_size=(2, 3, 3), stride=(1, 2, 2), padding=(1, 1, 0))
+        self.atention           = Attention(in_channels_tensor=32, in_channels_att_tensor=16, out_channels=16)
+        #concat ->      32 + 16 = 48 channels
+        self.conv3D             = nn.Conv3d(in_channels=48, out_channels=out_channels, kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 1, 1))
+        self.batchNormalization = nn.BatchNorm3d(out_channels)
+        self.relu               = nn.ReLU()
+        
+    def forward(self, input_tensor, prev_tensor1, prev_tensor2) :
+        x = self.convTranspose3d(input_tensor)        
+        x = self.atention(prev_tensor1, x)
+        x = torch.cat([prev_tensor1, x], dim=1)
+        x = self.conv3D(x)
+        x = self.batchNormalization(x)
+        x = self.relu(x)
+        return x
+    
+#----------------------------------------------------------------------------------------
+# Up 
+# --- PARTS OF THE UPSAMPLING OF THE MODEL 3
+#----------------------------------------------------------------------------------------
+
+class UpM3(nn.Module):
+    """Blocks of decoder"""
+
+    def __init__(self, in_channels=32,  out_channels=32, kernel_size_convT=(3, 2, 2), stride_convT=(1, 2, 2), padding_convT=(1,0,0)):
+        super().__init__()
+        self.convTranspose3d    = nn.ConvTranspose3d(in_channels=in_channels, out_channels=16, kernel_size=kernel_size_convT, stride=stride_convT, padding=padding_convT)
+        #self.convTranspose3d    = nn.ConvTranspose3d(in_channels=in_channels, out_channels=16, kernel_size=(2, 3, 3), stride=(1, 2, 2), padding=(1, 1, 0))
+        self.atention           = Attention(in_channels_tensor=32, in_channels_att_tensor=16, out_channels=16)
+        #concat -> 32 + 32 + 16 = 80 channels
+        self.conv3D             = nn.Conv3d(in_channels=80, out_channels=out_channels, kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 1, 1))
+        self.batchNormalization = nn.BatchNorm3d(out_channels)
+        self.relu               = nn.ReLU()
+        
+    def forward(self, input_tensor, prev_tensor1, prev_tensor2) :
+        x = self.convTranspose3d(input_tensor)        
+        x = self.atention(prev_tensor1, x)
+        x = torch.cat([prev_tensor2, prev_tensor1, x], dim=1)
+        x = self.conv3D(x)
+        x = self.batchNormalization(x)
+        x = self.relu(x)
+        return x
+    
+    
+    
+    
+    

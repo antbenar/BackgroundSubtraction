@@ -21,7 +21,7 @@ Thumbs.db
 TrainResult/
 runs/
 .pylint.d/
-logs/
+logs_tensorboard/
 
 # python
 __pycache__
