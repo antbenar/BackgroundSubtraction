@@ -43,11 +43,11 @@ class Net(nn.Module):
             self.upBlock2    =         UpM2(32, 32)
             self.upBlock3    =         UpM2(32, 32)
             self.upBlock4    =          Up2(32, 32, p_dropout)    
-        # elif(up_mode == 'M3'):
-        #     self.upBlock1    =         UpM3(16, 64, kernel_size_convT=(3, 3, 3), stride_convT=(1, 1, 1), padding_convT=(1,1,1))
-        #     self.upBlock2    =         UpM3(64, 64)
-        #     self.upBlock3    =         UpM3(64, 64)
-        #     self.upBlock4    =          Up2(64, 32, p_dropout)    
+        elif(up_mode == 'M3'):
+            self.upBlock1    =         UpM3(16, 64, kernel_size_convT=(3, 3, 3), stride_convT=(1, 1, 1), padding_convT=(1,1,1))
+            self.upBlock2    =         UpM3(64, 64)
+            self.upBlock3    =         UpM3(64, 64)
+            self.upBlock4    =          Up2(64, 32, p_dropout)    
         else:
             raise NotImplementedError('Unknown operation function.')
         

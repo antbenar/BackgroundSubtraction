@@ -10,6 +10,7 @@ from random              import shuffle
 from torch.autograd      import Variable
 
 
+
 #----------------------------------------------------------------------------------------
 # Averager class
 # --- Average of array or scalar
@@ -75,9 +76,9 @@ class ModelSize():
             for j in range(len(p)):
                 sizes.append(np.array(p[j].size()))
 
-        return self.sumBytes(sizes)//1000000
+        return self._sumBytes(sizes)//1000000
     
-    def sumBytes(self, sizes):
+    def _sumBytes(self, sizes):
         total_bytes = 0
         for i in range(len(sizes)):
             s = sizes[i]
@@ -143,7 +144,7 @@ class ModelSize():
             out_sizes.append(np.array(out.size()))
             input_ = out
             
-        total_bytes   = self.sumBytes(out_sizes)
+        total_bytes   = self._sumBytes(out_sizes)
         total_bytes //=1000000
         total_bytes  *=2   # *2 -> we need to store values AND gradients
         

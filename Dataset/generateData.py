@@ -2,9 +2,10 @@ import torch
 import numpy as np
 import os
 import glob
-from torch.utils.data import Dataset
-from matplotlib import pyplot as plt
-from keras.preprocessing import image as kImage
+from torch.utils.data          import Dataset
+from matplotlib                import pyplot as plt
+from keras.preprocessing       import image as kImage
+from torch.utils.data.sampler  import SubsetRandomSampler
 
 class GenerateData(Dataset):
     
@@ -13,37 +14,50 @@ class GenerateData(Dataset):
                      dataset_gt_dir, 
                      dataset_dir, 
                      framesBack, 
+                     resize,
+                     width,
+                     height,
+                     dataset_range,
                      trainStart, 
                      trainEnd, 
-                     transform=None, 
+                     transform = None, 
                      data_format='channels_last',
                      void_value = True,
                      showSample = False,
-                     resize = False
                  ):
         """
         Args:
             dataset_gt_dir (string): Path to the input dir.
             dataset_dir (string): Path to the groundtruth dir.
-            framesBack (int): Number of frames_back in out temporal subsets, if It is 0, the datase only will be a4D tensor (BHWC)
-            trainStart (int): Index of the first element to take into our data set
-            trainEnd (int): Index of the last element to take into our data set
-            transform: Null
+            framesBack (int)    : Number of frames_back in out temporal subsets, if It is 0, the datase only will be a4D tensor (BHWC)
+            resize (int)        : If the frames will be resized
+            width (int)         : width of the frame
+            height (int)        : height of the frame
+            dataset_range (bool): If the dataset has a range
+            trainStart (int)    : Index of the first element to take into our data set
+            trainEnd (int)      : Index of the last element to take into our data set
+            transform           : Null
             data_format (string): If the chanels are in last dim
             showSample (Boolean): If true plot the intermediate frame to qualitatively validate our trainset
         """
-        self.dataset_gt_dir = dataset_gt_dir
-        self.dataset_dir = dataset_dir
-        self.transform = transform
-        self.data_format = data_format
         
-        self.framesBack = framesBack
-        self.resize     = resize
-        self.trainStart = trainStart
-        self.trainEnd   = trainEnd
-        self.void_label = -1.
-        self.void_value = void_value
-        self.dataset    = self.generate()
+        self.dataset_gt_dir = dataset_gt_dir
+        self.dataset_dir    = dataset_dir
+        self.transform      = transform
+        self.data_format    = data_format
+        
+        self.resize         = resize
+        self.width          = width
+        self.height         = height
+        
+        self.dataset_range  = dataset_range
+        self.trainStart     = trainStart
+        self.trainEnd       = trainEnd
+        
+        self.framesBack     = framesBack
+        self.void_label     = -1.
+        self.void_value     = void_value
+        self.dataset        = self.generate()
         
         if(showSample):
             ## plot the intermediate frame to qualitatively validate our trainset
@@ -101,7 +115,7 @@ class GenerateData(Dataset):
         X_list = sorted(X_list)
         Y_list = sorted(Y_list)
         
-        if(self.resize == True):
+        if(self.dataset_range == True):
             #Solo quedarme con las imagenes comprendidas en el intervalo trainStart - trainEnd
             X_list = X_list[self.trainStart:self.trainEnd]
             Y_list = Y_list[self.trainStart:self.trainEnd]
@@ -157,9 +171,11 @@ class GenerateData(Dataset):
         X = []
     
         for i in range(len(X_list)):
-            #img = io.imread(X_list[i])
-            #img = kImage.load_img(X_list[i], target_size=(self.maxW, self.maxH))
-            img = kImage.load_img(X_list[i])
+            if(self.resize):
+                img = kImage.load_img(X_list[i], target_size=(self.width, self.height))
+            else:
+                img = kImage.load_img(X_list[i])
+                
             img = kImage.img_to_array(img)
             X.append(img)
             
@@ -173,7 +189,11 @@ class GenerateData(Dataset):
         Y = []
     
         for i in range(len(Y_list)):
-            img = kImage.load_img(Y_list[i], color_mode = "grayscale")
+            if(self.resize):
+                img = kImage.load_img(Y_list[i], target_size=(self.width, self.height), color_mode = "grayscale")
+            else:
+                img = kImage.load_img(Y_list[i], color_mode = "grayscale")
+            
             img = kImage.img_to_array(img)
             
             if(self.void_value):
@@ -189,6 +209,58 @@ class GenerateData(Dataset):
             Y.append(img)
             
         return np.asarray(Y)
+    
+    
+    #----------------------------------------------------------------------------------------
+    # Function to separate the whole dataset into three subsets for training, validation of training and test
+    #----------------------------------------------------------------------------------------
+        
+    def train_val_test_split(self, train_split_, val_split_, shuffle, batch_size, num_workers): 
+
+        dataset_size = len(self.dataset[0])
+        indices      = list(range(dataset_size))
+        train_split  = int(np.floor(train_split_ * dataset_size))                # obtain the number of train samples
+        val_split    = int(np.floor(train_split_ * val_split_ * dataset_size))   # obtain the number of val samples
+        train_split  = train_split - val_split                                   # obtain the position where the train samples end
+        val_split    = train_split + 2*val_split                                 # obtain the position where the val samples end
+        
+        if shuffle :
+            np.random.seed(1234)
+            np.random.shuffle(indices)
+            
+        train_indices, val_indices, test_indices = indices[:train_split], indices[train_split:val_split], indices[val_split:]
+
+        # Creating PT data samplers and loaders:
+        train_sampler  = SubsetRandomSampler(train_indices)
+        valid_sampler  = SubsetRandomSampler(val_indices)
+        test_sampler   = SubsetRandomSampler(test_indices)
+
+        train_loader = torch.utils.data.DataLoader(
+                            self, 
+                            batch_size  = batch_size, 
+                            shuffle     = shuffle, 
+                            num_workers = num_workers,
+                            sampler     = train_sampler
+                        )
+        
+        val_loader = torch.utils.data.DataLoader(
+                            self, 
+                            batch_size  = batch_size, 
+                            shuffle     = shuffle, 
+                            num_workers = num_workers,
+                            sampler     = valid_sampler
+                        )
+        
+        test_loader = torch.utils.data.DataLoader(
+                            self, 
+                            batch_size  = batch_size, 
+                            shuffle     = shuffle, 
+                            num_workers = num_workers,
+                            sampler     = test_sampler
+                        )
+
+        return train_loader, val_loader, test_loader
+    
     
     #----------------------------------------------------------------------------------------
     # Plot some samples of the dataset
