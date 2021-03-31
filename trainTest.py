@@ -40,7 +40,7 @@ class ModelTrainTest(nn.Module):
         # set lost
         self.criterion_loss = self._bce_loss
         
-        
+         
     #----------------------------------------------------------------------------------------
     # Set settings
     #----------------------------------------------------------------------------------------
@@ -310,6 +310,12 @@ class ModelTrainTest(nn.Module):
     #----------------------------------------------------------------------------------------
         
     def _test(self, test_loader):
+        category = self.category 
+        scene    = self.scene
+            
+        dir_tb = self.logdir +'/' + category + '_' + scene
+        tb = SummaryWriter(dir_tb)
+        
         # Metrics [Steer,Gas,Brake]
         avgMetrics   = Averager(2)
         step_view = len(test_loader)//5
@@ -326,13 +332,25 @@ class ModelTrainTest(nn.Module):
             prediction  = self._threshold(outputs, self.threshold)
             
             # plot
-            if(self.plot_test and i_step%step_view==0 ):
+            if(self.plot_test and (i_step+1)%step_view==0 ):
                 self.plotImgTest(i_step, inputs, groundtruth, prediction)
             
             # Metrics
             mean    = self._metrics(prediction, groundtruth)
-            avgMetrics.update(mean)  
-            print("Test metrics - f-measure:", avgMetrics[0], ", PWC:", avgMetrics[1])
+            avgMetrics.update(mean)
+
+            
+            if (i_step+1)%step_view==0:  # print every 2000 mini-batches
+                # add scalars to tensorboard
+                tb.add_scalar('Test/F-Measure' , avgMetrics.mean[0], (i_step+1)//step_view)
+                tb.add_scalar('Test/PWC'       , avgMetrics.mean[1], (i_step+1)//step_view)
+                
+                # add segmentation and groundtruth to tensorboard
+                dim5D = self.framesBack > 0
+                tensorBoardTool = TensorBoardTool(dir_tb, dim5D)
+                tensorBoardTool.saveImgTest((i_step+1)//step_view, inputs, groundtruth, prediction)
+                
+                print("Test metrics step = ", (i_step+1)//step_view ,"- f-measure:", avgMetrics.mean[0], ", PWC:", avgMetrics.mean[1])
             
             del outputs, inputs, groundtruth
             torch.cuda.empty_cache()
@@ -417,8 +435,8 @@ class ModelTrainTest(nn.Module):
                 
                 try:
                     self._execute(mode)
-                except ValueError:
-                    print("----")
+                except ValueError as err:
+                    print("Error: ", err)
                     
                 
                 
@@ -524,19 +542,19 @@ class ModelTrainTest(nn.Module):
     # Plot img test
     #----------------------------------------------------------------------------------------
     
-    def plotImgTest(self, i_step, inputs, groundtruth, prediction):     
+    def plotImgTest(self, i_step, inputs_, groundtruth_, prediction_):     
         print("~~~~~~~~~~~~~~~ Plot img test ~~~~~~~~~~~~~~~~")
         
         if(self.framesBack > 0):
             # (b, c, t, h, w) -> (t, b, h, w, c) -> get first frame of the sequence of frames
-            inputs      = inputs.permute(2, 0, 3, 4, 1)[0]
-            groundtruth = groundtruth.permute(2, 0, 3, 4, 1)[0]
-            prediction  = prediction.permute(2, 0, 3, 4, 1)[0]
+            inputs      = inputs_.permute(2, 0, 3, 4, 1)[0]
+            groundtruth = groundtruth_.permute(2, 0, 3, 4, 1)[0]
+            prediction  = prediction_.permute(2, 0, 3, 4, 1)[0]
         else :
             # (b, c, h, w) -> (b, h, w, c)
-            inputs      = inputs.permute(0, 2, 3, 1)
-            groundtruth = groundtruth.permute(0, 2, 3, 1)
-            prediction  = prediction.permute(0, 2, 3, 1)
+            inputs      = inputs_.permute(0, 2, 3, 1)
+            groundtruth = groundtruth_.permute(0, 2, 3, 1)
+            prediction  = prediction_.permute(0, 2, 3, 1)
 
         # get only the first element of the batch
         inputs  = inputs[0].cpu().numpy()
@@ -571,3 +589,4 @@ class ModelTrainTest(nn.Module):
         plt.tight_layout()
         
         plt.show()
+

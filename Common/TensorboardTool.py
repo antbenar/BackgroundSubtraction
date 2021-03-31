@@ -13,6 +13,8 @@ class TensorBoardTool:
         self.logdir = logdir
         self.file_writer = file_writer
         self.dim5D  = dim5D
+        
+        
     #----------------------------------------------------------------------------------------
     # Run - Start tensorboard server
     # or in console run -> tensorboard --logdir=logs/train_data/
@@ -72,6 +74,7 @@ class TensorBoardTool:
         file_writer.add_graph(net, input_to_model=input_tensor, verbose=False)
         file_writer.close()
 
+
     #----------------------------------------------------------------------------------------
     # Use tensorboard to add scalars
     #----------------------------------------------------------------------------------------
@@ -85,3 +88,46 @@ class TensorBoardTool:
 
     def closeWriter(self):
         self.file_writer.close()
+
+
+    #----------------------------------------------------------------------------------------
+    # Plot img test
+    #----------------------------------------------------------------------------------------
+    
+    def saveImgTest(self, i_step, inputs_, groundtruth_, prediction_):     
+        if(self.dim5D):
+            # (b, c, t, h, w) -> (t, b, h, w, c) -> get first frame of the sequence of frames
+            inputs      = inputs_.permute(2, 0, 3, 4, 1)[0]
+            groundtruth = groundtruth_.permute(2, 0, 3, 4, 1)[0]
+            prediction  = prediction_.permute(2, 0, 3, 4, 1)[0]
+        else :
+            # (b, c, h, w) -> (b, h, w, c)
+            inputs      = inputs_.permute(0, 2, 3, 1)
+            groundtruth = groundtruth_.permute(0, 2, 3, 1)
+            prediction  = prediction_.permute(0, 2, 3, 1)
+
+        # get only the first element of the batch
+        inputs          = inputs[0]     .cpu().numpy() / 255.0
+        groundtruth     = groundtruth[0].cpu().numpy() 
+        prediction      = prediction[0] .cpu().numpy()
+ 
+        # change -1 to a gray color
+        shape = groundtruth.shape
+        groundtruth     = groundtruth.reshape(-1)
+        idx             = np.where(groundtruth==-1)[0] # find non-ROI
+        if (len(idx)>0):
+            groundtruth[idx] = 0.55
+        groundtruth     = groundtruth.reshape(shape)
+        
+        
+        inputs          = torch.from_numpy(inputs)
+        groundtruth     = torch.from_numpy(groundtruth)
+        prediction      = torch.from_numpy(prediction)
+        
+        file_writer = SummaryWriter(self.logdir + '/' )
+        file_writer.add_images(str(i_step)+"/Input image", inputs,      global_step=i_step, dataformats='HWC')
+        file_writer.add_images(str(i_step)+"/Gt image"   , groundtruth, global_step=i_step, dataformats='HWC')
+        file_writer.add_images(str(i_step)+"/Pred image" , prediction,  global_step=i_step, dataformats='HWC')
+        file_writer.close()
+            
+        

@@ -18,8 +18,8 @@ class Settings(object):
         
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~ settings model ~~~~~~~~~~~~~~~~~~~~~~~~~~~
         
-        self.model_name         = 'Model_M1'
-        self.model_dim          = '3D'   # dimension of the model
+        self.model_name         = 'Model_M1-2D'
+        self.model_dim          = '2D'   # dimension of the model
         self.up_mode            = 'base' # only used if model_dim = 3D
         self.n_channels         = 3      # input chanels
         self.p_dropout          = 0.2    # dropout probability
@@ -46,7 +46,8 @@ class Settings(object):
         self.plot_test          = True
         
         # tensorboard
-        self.logdir             = "logs_tensorboard/New_results/Training_lossM1_" + datetime.now().strftime("%d-%m-%Y_%H-%M-%S") + "/"
+        #self.logdir             = "logs_tensorboard/New_results/Training_loss_"+ self.model_name+"_" + datetime.now().strftime("%d-%m-%Y_%H-%M-%S") + "/"
+        self.logdir             = "logs_tensorboard/__results_all_dirs/" + self.model_name + "/"
         self.view_batch         = 100                                     # print losses every n batches
         
         
@@ -70,14 +71,18 @@ class Settings(object):
         
         # dictionary of catergories and scenes of the Cdnet2014
         
-        # self.dataset            = {
-        #     'baseline':['highway']
-        # }
+        #  -- REVISAR BOATS (MUY LARGA)
+        #  -- REVISAR PEDESTRIANS, FALL, 0 F-MEASURE EN VAL
+        #  -- REVISAR FOUNTAIN, CARGA MAL EL GROUNDTRUTH
         
         self.dataset            = {
-            'baseline':['PETS2006'],
-            'dynamicBackground':['boats', 'canoe', 'fall', 'fountain01', 'fountain02', 'overpass']
+            'baseline':['highway']
         }
+        
+        # self.dataset            = {
+        #     'baseline':['highway', 'pedestrians', 'office', 'PETS2006'],
+        #     'dynamicBackground':['canoe', 'fall'],
+        # }
         
         # self.dataset            = {
         #     'baseline':['highway', 'pedestrians', 'office', 'PETS2006'],

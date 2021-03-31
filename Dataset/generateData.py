@@ -230,11 +230,12 @@ class GenerateData(Dataset):
             
         train_indices, val_indices, test_indices = indices[:train_split], indices[train_split:val_split], indices[val_split:]
 
+        
         # Creating PT data samplers and loaders:
         train_sampler  = SubsetRandomSampler(train_indices)
         valid_sampler  = SubsetRandomSampler(val_indices)
         test_sampler   = SubsetRandomSampler(test_indices)
-
+        
         train_loader = torch.utils.data.DataLoader(
                             self, 
                             batch_size  = batch_size, 

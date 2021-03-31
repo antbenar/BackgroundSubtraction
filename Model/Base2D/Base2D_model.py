@@ -4,6 +4,7 @@ from .Base2D_parts import EndecBlock2D
 from .Base2D_parts import Up2D
 from .Base2D_parts import Up2D_2
 from .Base2D_parts import Conv2DSigmoid
+from .Base2D_parts import ConvLstm2DRelu
 
 class Net2D(nn.Module):
     def __init__(self, n_channels, p_dropout=0.2):
@@ -26,6 +27,8 @@ class Net2D(nn.Module):
         self.conv2DRelu3 =     Conv2DRelu(16, 32)
         #Block 4
         self.conv2DRelu4 =     Conv2DRelu(32, 64, stride=(1, 1))
+        #Block convLSTM
+        # self.convLSTM    = ConvLstm2DRelu(32, hidden_dim=[16, 16, 16]) #entran 32 canales y salen 16
         
         #~~~~~~~~~~~~~~~~~~~ Decoder ~~~~~~~~~~~~~~~~~~~~~~
         
@@ -62,7 +65,8 @@ class Net2D(nn.Module):
         x3_     = self.conv2DRelu3(x3_)
         
         x       = self.conv2DRelu4(x3_)
-        
+        # x       = self.convLSTM(x3_)
+
         #~~~~~~~~~~~~~~~~~~~ Decoder ~~~~~~~~~~~~~~~~~~~~~~
 
         x       = self.upBlock1(x, x3_, x3)

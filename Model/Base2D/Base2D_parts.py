@@ -1,5 +1,6 @@
 import torch
 import torch.nn     as nn
+from Model.ConvLstm import ConvLSTM
 
 #----------------------------------------------------------------------------------------
 # Conv2dSigmoid
@@ -62,6 +63,43 @@ class EndecBlock2D(nn.Module):
         x_ = self.batchNormalization(x_)
         x_ = self.conv2dRelu2(x_)
         return x, x_
+    
+    
+#----------------------------------------------------------------------------------------
+# ConvLstm2DRelu
+#----------------------------------------------------------------------------------------
+      
+class ConvLstm2DRelu(nn.Module):
+    """Convolution 3D with activation relu"""
+
+    def __init__(self, in_channels, hidden_dim=[16, 16, 16], kernel_size=(3, 3), num_layers=3, batch_first=True, bias=True, return_all_layers=True):
+        super().__init__()
+        self.convLstm2D = ConvLSTM(input_dim=in_channels, 
+                                   hidden_dim=hidden_dim, 
+                                   kernel_size=kernel_size,
+                                   num_layers=num_layers,
+                                   batch_first=batch_first,
+                                   bias=bias, 
+                                   return_all_layers=return_all_layers
+                          )
+        self.relu       = nn.ReLU()
+        
+    def forward(self, input_tensor) :
+        # (b, c, h, w) -> (t, b, c, h, w)
+        x       = input_tensor.unsqueeze(0)
+        # permute in form (t, b, c, h, w) -> (b, t, c, h, w)
+        x       = x.permute(1, 0, 2, 3, 4)
+
+        x, _    = self.convLstm2D(x)
+
+        # permute back (b, t, c, h, w) -> (t, b, c, h, w)
+        x       = x[0].permute(1, 0, 2, 3, 4)
+
+        # (t, b, c, h, w) -> (b, c, h, w)
+        x       = x[0]
+        
+        x       = self.relu(x)
+        return x
     
     
 #----------------------------------------------------------------------------------------

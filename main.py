@@ -14,6 +14,7 @@ class Main():
         logging.getLogger('tensorflow').setLevel(logging.ERROR)
         self.settings = settings
         
+        
     #----------------------------------------------------------------------------------------
     # Function to train the model
     #----------------------------------------------------------------------------------------
@@ -21,6 +22,7 @@ class Main():
     def train(self):
         self.model = ModelTrainTest(self.net, self.settings)
         self.model.execute(mode='train_val_test')
+        
         
     #----------------------------------------------------------------------------------------
     # Function to test the model
@@ -30,15 +32,6 @@ class Main():
         self.model = ModelTrainTest(self.net, self.settings)
         self.model.load(self.settings.loadPath)
         self.model.execute(mode='test')
-        
-    #----------------------------------------------------------------------------------------
-    # Function to train the model
-    #----------------------------------------------------------------------------------------
-        
-    def run(self):
-        self.model = ModelTrainTest(self.net, self.settings)
-        self.model.load(self.settings.loadPath)
-        #self.model.execute()
         
         
     #----------------------------------------------------------------------------------------
@@ -65,6 +58,7 @@ class Main():
         del self.model
         torch.cuda.empty_cache()
         
+        
     #----------------------------------------------------------------------------------------
     # Instance Model
     #----------------------------------------------------------------------------------------
@@ -77,6 +71,11 @@ class Main():
                 self.settings.p_dropout
             )
         elif (self.settings.model_dim == '3D'): #3D
+            if (self.settings.model_name == 'Model_M2'):
+                self.settings.up_mode = 'M2'
+            else:
+                self.settings.up_mode = 'base'    
+                
             self.net = Net(
                 self.settings.n_channels, 
                 self.settings.p_dropout, 
@@ -96,8 +95,8 @@ if __name__ == "__main__":
     # Instance model
     main._init_model()
     
-    #main.test()
-    main.train()
+    main.test()
+    #main.train()
     #main.saveTrainData()
     #main.calculateModelSize()
     
