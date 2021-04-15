@@ -49,7 +49,7 @@ class Net(nn.Module):
             self.upBlock3    =         UpM3(64, 64)
             self.upBlock4    =          Up2(64, 32, p_dropout)    
         else:
-            raise NotImplementedError('Unknown operation function.')
+            raise NotImplementedError('Unknown up_mode function.')
         
         
         self.activation  =  Conv3DSigmoid(32,  1, kernel_size=(1, 3, 3), stride=(1, 1, 1))

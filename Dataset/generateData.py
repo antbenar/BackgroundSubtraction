@@ -20,31 +20,37 @@ class GenerateData(Dataset):
                      dataset_range,
                      trainStart, 
                      trainEnd, 
-                     transform = None, 
-                     data_format='channels_last',
-                     void_value = True,
-                     showSample = False,
+                     transform        = None, 
+                     data_format      = 'channels_last',
+                     dataset_fg_bg    = False,
+                     void_value       = True,
+                     showSample       = False,
+                     differenceFrames = False
                  ):
         """
         Args:
             dataset_gt_dir (string): Path to the input dir.
-            dataset_dir (string): Path to the groundtruth dir.
-            framesBack (int)    : Number of frames_back in out temporal subsets, if It is 0, the datase only will be a4D tensor (BHWC)
-            resize (int)        : If the frames will be resized
-            width (int)         : width of the frame
-            height (int)        : height of the frame
-            dataset_range (bool): If the dataset has a range
-            trainStart (int)    : Index of the first element to take into our data set
-            trainEnd (int)      : Index of the last element to take into our data set
-            transform           : Null
-            data_format (string): If the chanels are in last dim
-            showSample (Boolean): If true plot the intermediate frame to qualitatively validate our trainset
+            dataset_dir (string)   : Path to the groundtruth dir.
+            framesBack (int)       : Number of frames_back in out temporal subsets, if It is 0, the datase only will be a4D tensor (BHWC)
+            resize (int)           : If the frames will be resized
+            width (int)            : width of the frame
+            height (int)           : height of the frame
+            dataset_range (bool)   : If the dataset has a range
+            trainStart (int)       : Index of the first element to take into our data set
+            trainEnd (int)         : Index of the last element to take into our data set
+            transform              : Null
+            data_format (string)   : If the chanels are in last dim
+            dataset_fg_bg (Boolean): To generate a 2 chanel gt, one for background an another one for foreground
+            showSample (Boolean)   : If true plot the intermediate frame to qualitatively validate our trainset
+            differenceFrames (Boolean): If true It additions the framesback with the difference of the current frame
         """
         
         self.dataset_gt_dir = dataset_gt_dir
         self.dataset_dir    = dataset_dir
         self.transform      = transform
         self.data_format    = data_format
+        self.dataset_fg_bg  = dataset_fg_bg
+        self.differenceFrames  = differenceFrames
         
         self.resize         = resize
         self.width          = width
@@ -57,7 +63,12 @@ class GenerateData(Dataset):
         self.framesBack     = framesBack
         self.void_label     = -1.
         self.void_value     = void_value
+        
+        # generate dataset
         self.dataset        = self.generate()
+        
+        print('Dataset Input shape', self.dataset[0].shape)
+        print('Dataset Gt shape', self.dataset[1].shape)
         
         if(showSample):
             ## plot the intermediate frame to qualitatively validate our trainset
@@ -152,10 +163,12 @@ class GenerateData(Dataset):
         data_5d = np.empty((n_samples-(n_look_back-1), n_look_back, data.shape[1], data.shape[2], data.shape[3]), dtype='float32')
         
         for i in range(0, n_samples):
-            tmp = data[i:i+n_look_back]
+            tmp  = data[i:i+n_look_back]
+            tmp2 = data[i:i+n_look_back]
             if tmp.shape[0] == n_look_back:
                 for rotate_channel_id in range(0, n_look_back): # rotate the channels such that bring the current input as first channel
                     tmp[rotate_channel_id] = tmp[n_look_back-1-rotate_channel_id]
+                    
                 tmp = tmp.reshape(1, n_look_back, data.shape[1], data.shape[2], data.shape[3])
                 data_5d[k] = tmp
                 tmp = [] # clear tmp
@@ -200,11 +213,25 @@ class GenerateData(Dataset):
                 shape = img.shape
                 img/=255.0
                 img = img.reshape(-1)
-                idx = np.where(np.logical_and(img>0.25, img<0.8))[0] # find non-ROI
+                idx = np.where(np.logical_and(img>0, img<1))[0] # find non-ROI
                 if (len(idx)>0):
                     img[idx] = self.void_label
                 img = img.reshape(shape)
-                img = np.floor(img)
+
+            
+            if (self.dataset_fg_bg):
+                img_fg          = np.copy(img)
+                img_bg          = img
+                shape           = img_bg.shape
+                img_bg          = img_bg.reshape(-1)
+                idx_bg          = np.where(img_bg==0)[0] 
+                idx_fg          = np.where(img_bg==1)[0] 
+                
+                img_bg[idx_bg]  = 1
+                img_bg[idx_fg]  = 0
+                img_bg          = img_bg.reshape(shape)
+                 
+                img = np.concatenate([img_bg, img_fg], axis=2)
             
             Y.append(img)
             
@@ -226,40 +253,32 @@ class GenerateData(Dataset):
         
         if shuffle :
             np.random.seed(1234)
-            np.random.shuffle(indices)
+            indices = np.random.shuffle(indices)
             
         train_indices, val_indices, test_indices = indices[:train_split], indices[train_split:val_split], indices[val_split:]
-
         
-        # Creating PT data samplers and loaders:
-        train_sampler  = SubsetRandomSampler(train_indices)
-        valid_sampler  = SubsetRandomSampler(val_indices)
-        test_sampler   = SubsetRandomSampler(test_indices)
         
         train_loader = torch.utils.data.DataLoader(
                             self, 
                             batch_size  = batch_size, 
-                            shuffle     = shuffle, 
                             num_workers = num_workers,
-                            sampler     = train_sampler
+                            sampler     = train_indices
                         )
         
         val_loader = torch.utils.data.DataLoader(
                             self, 
                             batch_size  = batch_size, 
-                            shuffle     = shuffle, 
                             num_workers = num_workers,
-                            sampler     = valid_sampler
+                            sampler     = val_indices
                         )
         
         test_loader = torch.utils.data.DataLoader(
                             self, 
                             batch_size  = batch_size, 
-                            shuffle     = shuffle, 
                             num_workers = num_workers,
-                            sampler     = test_sampler
+                            sampler     = test_indices
                         )
-
+        
         return train_loader, val_loader, test_loader
     
     
@@ -267,11 +286,7 @@ class GenerateData(Dataset):
     # Plot some samples of the dataset
     #----------------------------------------------------------------------------------------
     
-    def plotSample(self, idx_frame):     
-        print("~~~~~~~~~~~~~~~ Plot Sample ~~~~~~~~~~~~~~~~")
-        print('Input shape', self.dataset[0].shape)
-        print('Gt shape', self.dataset[1].shape)
-        
+    def plotSample(self, idx_frame):             
         inputs, gt = self.dataset[0][idx_frame], self.dataset[1][idx_frame]
 
         if (self.data_format=='channels_last'):
@@ -281,7 +296,6 @@ class GenerateData(Dataset):
         # change -1 to a gray color
         if(self.void_value):
             shape = gt.shape
-            gt   /=255.0
             gt    = gt.reshape(-1)
             idx   = np.where(gt==-1)[0] # find non-ROI
             if (len(idx)>0):
@@ -293,18 +307,50 @@ class GenerateData(Dataset):
             inputs = inputs[0]
             gt     = gt[0]
             
-        ax = plt.subplot(1, 2, 1)
-        ax.set_title('Input #{}'.format(idx_frame))
-        ax.axis('off')
-        plt.imshow(inputs/255)
-        plt.tight_layout()
-        
-        ax2 = plt.subplot(1, 2, 2)
-        ax2.set_title('Gt #{}'.format(idx_frame))
-        ax2.axis('off')
-        plt.imshow(gt, cmap=plt.get_cmap('gray'))
-        plt.tight_layout()
 
-        plt.show()
         
         
+        
+        if(self.dataset_fg_bg):
+            gt        = np.moveaxis(gt, -1, 0)
+            
+            shape     = (1, self.width, self.height)
+            img_bg    = gt[0].reshape(shape)
+            img_fg    = gt[1].reshape(shape)
+
+            img_bg    = np.moveaxis(img_bg, 0, -1)
+            img_fg    = np.moveaxis(img_fg, 0, -1)
+            
+            ax = plt.subplot(1, 3, 1)
+            ax.set_title('Input #{}'.format(idx_frame))
+            ax.axis('off')
+            plt.imshow(inputs/255)
+            plt.tight_layout()
+
+            ax2 = plt.subplot(1, 3, 2)
+            ax2.set_title('Gt Bg #{}'.format(idx_frame))
+            ax2.axis('off')
+            plt.imshow(img_bg, cmap=plt.get_cmap('gray'))
+            plt.tight_layout()
+            
+            ax3 = plt.subplot(1, 3, 3)
+            ax3.set_title('Gt Fg #{}'.format(idx_frame))
+            ax3.axis('off')
+            plt.imshow(img_fg, cmap=plt.get_cmap('gray'))
+            plt.tight_layout()
+    
+            plt.show()
+        else:
+            ax = plt.subplot(1, 2, 1)
+            ax.set_title('Input #{}'.format(idx_frame))
+            ax.axis('off')
+            plt.imshow(inputs/255)
+            plt.tight_layout()
+        
+            ax2 = plt.subplot(1, 2, 2)
+            ax2.set_title('Gt #{}'.format(idx_frame))
+            ax2.axis('off')
+            plt.imshow(gt, cmap=plt.get_cmap('gray'))
+            plt.tight_layout()
+    
+            plt.show()

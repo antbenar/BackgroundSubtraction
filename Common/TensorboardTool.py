@@ -94,17 +94,17 @@ class TensorBoardTool:
     # Plot img test
     #----------------------------------------------------------------------------------------
     
-    def saveImgTest(self, i_step, inputs_, groundtruth_, prediction_):     
+    def saveImgTest(self, model_name, i_step, inputs_, groundtruth_, prediction_):     
         if(self.dim5D):
-            # (b, c, t, h, w) -> (t, b, h, w, c) -> get first frame of the sequence of frames
-            inputs      = inputs_.permute(2, 0, 3, 4, 1)[0]
-            groundtruth = groundtruth_.permute(2, 0, 3, 4, 1)[0]
-            prediction  = prediction_.permute(2, 0, 3, 4, 1)[0]
+            # (b, c, t, h, w) -> (t, b, c, h, w) -> get first frame of the sequence of frames
+            inputs      = inputs_     .permute(2, 0, 1, 3, 4)[0]
+            groundtruth = groundtruth_.permute(2, 0, 1, 3, 4)[0]
+            prediction  = prediction_ .permute(2, 0, 1, 3, 4)[0]
         else :
             # (b, c, h, w) -> (b, h, w, c)
-            inputs      = inputs_.permute(0, 2, 3, 1)
-            groundtruth = groundtruth_.permute(0, 2, 3, 1)
-            prediction  = prediction_.permute(0, 2, 3, 1)
+            inputs      = inputs_ 
+            groundtruth = groundtruth_
+            prediction  = prediction_
 
         # get only the first element of the batch
         inputs          = inputs[0]     .cpu().numpy() / 255.0
@@ -124,10 +124,16 @@ class TensorBoardTool:
         groundtruth     = torch.from_numpy(groundtruth)
         prediction      = torch.from_numpy(prediction)
         
+        # gray to rgb to concat three images in the future
+        groundtruth = groundtruth.repeat(3, 1, 1)
+        prediction  = prediction.repeat(3, 1, 1)
+        
+        # concat thre images into one image
+        images = torch.cat((inputs, groundtruth, prediction), 2)
+
+        # write on tensorboard
         file_writer = SummaryWriter(self.logdir + '/' )
-        file_writer.add_images(str(i_step)+"/Input image", inputs,      global_step=i_step, dataformats='HWC')
-        file_writer.add_images(str(i_step)+"/Gt image"   , groundtruth, global_step=i_step, dataformats='HWC')
-        file_writer.add_images(str(i_step)+"/Pred image" , prediction,  global_step=i_step, dataformats='HWC')
+        file_writer.add_images(model_name+'/'+str(i_step), images, global_step=None, dataformats='CHW')
         file_writer.close()
             
         

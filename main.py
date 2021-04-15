@@ -17,21 +17,15 @@ class Main():
         
     #----------------------------------------------------------------------------------------
     # Function to train the model
+    # mode='train_val', 'test', 'train_val_test'
     #----------------------------------------------------------------------------------------
         
-    def train(self):
+    def execute(self, mode='train_val'):
+        if(mode=='test'):
+            self.settings.dataset_fg_bg = False
+            
         self.model = ModelTrainTest(self.net, self.settings)
-        self.model.execute(mode='train_val_test')
-        
-        
-    #----------------------------------------------------------------------------------------
-    # Function to test the model
-    #----------------------------------------------------------------------------------------
-        
-    def test(self):
-        self.model = ModelTrainTest(self.net, self.settings)
-        self.model.load(self.settings.loadPath)
-        self.model.execute(mode='test')
+        self.model.execute(mode) 
         
         
     #----------------------------------------------------------------------------------------
@@ -64,25 +58,67 @@ class Main():
     #----------------------------------------------------------------------------------------
       
     def _init_model(self):
-        if (self.settings.model_dim == '2D'):
-            self.settings.framesBack = 0
+        if (self.settings.model_name == 'Model_M1-2D-LSTM'):
+            self.settings.framesBack          = 0
+            self.settings.dataset_fg_bg       = False
+            self.settings.model_dim           = '2D'
+            self.settings.activation          = 'sigmoid'
+            self.settings.up_mode             = 'base'
             self.net = Net2D(
                 self.settings.n_channels, 
-                self.settings.p_dropout
+                self.settings.p_dropout,
+                up_mode    = self.settings.up_mode,
+                activation = self.settings.activation
             )
-        elif (self.settings.model_dim == '3D'): #3D
-            if (self.settings.model_name == 'Model_M2'):
-                self.settings.up_mode = 'M2'
-            else:
-                self.settings.up_mode = 'base'    
-                
+        elif (self.settings.model_name == 'Model_M1-2D-LSTM_softmax'):
+            self.settings.framesBack          = 0
+            self.settings.dataset_fg_bg       = True
+            self.settings.model_dim           = '2D'
+            self.settings.activation          = 'softmax'
+            self.settings.up_mode             = 'base'
+            self.net = Net2D(
+                self.settings.n_channels, 
+                self.settings.p_dropout,
+                up_mode    = self.settings.up_mode,
+                activation = self.settings.activation
+            )
+        elif (self.settings.model_name == 'Model_M2-2D-LSTM'):
+            #not yet implemented
+            self.settings.framesBack          = 0
+            self.settings.dataset_fg_bg       = False
+            self.settings.model_dim           = '2D'
+            self.settings.activation          = 'sigmoid'
+            self.settings.up_mode             = 'M2'
+            self.net = Net2D(
+                self.settings.n_channels, 
+                self.settings.p_dropout,
+                up_mode    = self.settings.up_mode,
+                activation = self.settings.activation
+            )
+        elif (self.settings.model_name == 'Model_M2'):
+            self.settings.framesBack          = self.settings.framesBack
+            self.settings.dataset_fg_bg       = False
+            self.settings.model_dim           = '3D'
+            self.settings.up_mode             = 'M2'
+            self.settings.activation          = 'sigmoid'
             self.net = Net(
                 self.settings.n_channels, 
                 self.settings.p_dropout, 
                 up_mode= self.settings.up_mode
             )
+        elif (self.settings.model_name == 'Model_M1'):
+            self.settings.framesBack          = self.settings.framesBack
+            self.settings.dataset_fg_bg       = False
+            self.settings.model_dim           = '3D'
+            self.settings.up_mode             = 'base'
+            self.settings.activation          = 'sigmoid'
+            self.net = Net(
+                self.settings.n_channels, 
+                self.settings.p_dropout, 
+                up_mode= self.settings.up_mode
+            )   
         else:
-            raise NotImplementedError('Dimension model not implemented')
+            raise NotImplementedError('Model is not implemented')
         
         
         
@@ -95,8 +131,9 @@ if __name__ == "__main__":
     # Instance model
     main._init_model()
     
-    main.test()
-    #main.train()
+    #main.execute(mode='train_val')
+    main.execute(mode='test')
+    #main.execute(mode='train_val_test')
     #main.saveTrainData()
     #main.calculateModelSize()
     

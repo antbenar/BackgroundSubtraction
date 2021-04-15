@@ -1,6 +1,7 @@
 import torch
-import torch.nn     as nn
-from Model.ConvLstm import ConvLSTM
+import torch.nn              as nn
+import torch.nn.functional   as F
+from Model.ConvLstm          import ConvLSTM
 
 #----------------------------------------------------------------------------------------
 # Conv2dSigmoid
@@ -18,6 +19,39 @@ class Conv2DSigmoid(nn.Module):
     def forward(self, input_tensor) :
         x = self.conv2d(input_tensor)
         x = self.sigmoid(x)
+        return x
+    
+    
+#----------------------------------------------------------------------------------------
+# Conv2dSigmoid
+#----------------------------------------------------------------------------------------
+      
+class Conv2DSoftmax(nn.Module):
+    """Convolution 2d with activation relu"""
+
+    def __init__(self, in_channels, out_channels=2, kernel_size=(3, 3), stride=(1, 1)):
+        super().__init__()
+        padding      = (kernel_size[0]//2, kernel_size[1]//2)
+        self.conv2d  = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding)
+        self.softmax = torch.nn.Softmax(dim=1)
+    
+    def _softmax_2d(self, x):
+        """
+        For the lack of a true 2D softmax in pytorch, we reshape each image from (C, W, H) to (C, W*H) and then
+        apply softmax, and then restore the original shape.
+        :param x: A 4D tensor of shape (B, C, W, H) to apply softmax across the W and H dimensions
+        :return: Softmax(x, dims=(2,3))
+        """
+        B, C, W, H = x.size()
+        x_flat = x.view((B, C, W*H))
+        x_softmax = self.softmax(x_flat)
+        return x_softmax.view((B, C, W, H))
+    
+    def forward(self, input_tensor) :
+        x = self.conv2d(input_tensor)        
+        x = self._softmax_2d(x)
+        #x = torch.argmax(x, dim=1, keepdim=True).float()
+        
         return x
     
 #----------------------------------------------------------------------------------------

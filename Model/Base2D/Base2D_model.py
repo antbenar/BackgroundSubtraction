@@ -4,10 +4,11 @@ from .Base2D_parts import EndecBlock2D
 from .Base2D_parts import Up2D
 from .Base2D_parts import Up2D_2
 from .Base2D_parts import Conv2DSigmoid
+from .Base2D_parts import Conv2DSoftmax
 from .Base2D_parts import ConvLstm2DRelu
 
 class Net2D(nn.Module):
-    def __init__(self, n_channels, p_dropout=0.2):
+    def __init__(self, n_channels, p_dropout=0.2, up_mode='base', activation='sigmoid'):
         super(Net2D, self).__init__()
         
         self.n_channels = n_channels
@@ -26,24 +27,32 @@ class Net2D(nn.Module):
         self.endecBlock3 =   EndecBlock2D(32, 16)
         self.conv2DRelu3 =     Conv2DRelu(16, 32)
         #Block 4
-        self.conv2DRelu4 =     Conv2DRelu(32, 64, stride=(1, 1))
+        #self.conv2DRelu4 =     Conv2DRelu(32, 64, stride=(1, 1))
         #Block convLSTM
-        # self.convLSTM    = ConvLstm2DRelu(32, hidden_dim=[16, 16, 16]) #entran 32 canales y salen 16
+        self.convLSTM    = ConvLstm2DRelu(32, hidden_dim=[16, 16, 16]) #entran 32 canales y salen 16
         
         #~~~~~~~~~~~~~~~~~~~ Decoder ~~~~~~~~~~~~~~~~~~~~~~
         
-        #BlockDec 1
-        self.upBlock1    =           Up2D(64, 64, kernel_size_convT=(3, 3), stride_convT=(1, 1), padding_convT=(1,1))
-        #BlockDec 2
-        self.upBlock2    =           Up2D(64, 64)
-        #BlockDec 3
-        self.upBlock3    =           Up2D(64, 64)
-        #BlockDec 4 
-        self.upBlock4    =         Up2D_2(64, 16, p_dropout)
-        
-        self.activation  =  Conv2DSigmoid(16,  1, kernel_size=(3, 3), stride=(1, 1))
-        
-        
+        if(up_mode == 'base'):
+            self.upBlock1    =           Up2D(16, 64, kernel_size_convT=(3, 3), stride_convT=(1, 1), padding_convT=(1,1))
+            self.upBlock2    =           Up2D(64, 64)
+            self.upBlock3    =           Up2D(64, 64)
+            self.upBlock4    =         Up2D_2(64, 16, p_dropout) 
+        elif(up_mode == 'M2'):
+            self.upBlock1    =           Up2D(16, 64, kernel_size_convT=(3, 3), stride_convT=(1, 1), padding_convT=(1,1))
+            self.upBlock2    =           Up2D(64, 64)
+            self.upBlock3    =           Up2D(64, 64)
+            self.upBlock4    =         Up2D_2(64, 16, p_dropout)
+        else:
+            raise NotImplementedError('Unknown up_mode function.')
+
+
+        if(  activation =='sigmoid'):
+            self.activation  =  Conv2DSigmoid(16,  1, kernel_size=(3, 3), stride=(1, 1)) 
+        elif(activation == 'softmax'):
+            self.activation  =  Conv2DSoftmax(16,  2, kernel_size=(3, 3), stride=(1, 1))
+        else:
+            raise NotImplementedError('Unknown activation function.')
         
     #----------------------------------------------------------------------------------------
     # Forward
@@ -64,8 +73,8 @@ class Net2D(nn.Module):
         x3, x3_ = self.endecBlock3(x2_)
         x3_     = self.conv2DRelu3(x3_)
         
-        x       = self.conv2DRelu4(x3_)
-        # x       = self.convLSTM(x3_)
+        # x       = self.conv2DRelu4(x3_)
+        x       = self.convLSTM(x3_)
 
         #~~~~~~~~~~~~~~~~~~~ Decoder ~~~~~~~~~~~~~~~~~~~~~~
 

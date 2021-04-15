@@ -18,12 +18,14 @@ class Settings(object):
         
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~ settings model ~~~~~~~~~~~~~~~~~~~~~~~~~~~
         
-        self.model_name         = 'Model_M1-2D'
-        self.model_dim          = '2D'   # dimension of the model
-        self.up_mode            = 'base' # only used if model_dim = 3D
-        self.n_channels         = 3      # input chanels
-        self.p_dropout          = 0.2    # dropout probability
-        self.threshold          = 0.75   # Static threshold to make segmentation
+        self.model_name         = 'Model_M1-2D-LSTM_softmax'
+        self.model_dim          = '2D'      # dimension of the model
+        self.up_mode            = 'base'    # It changes in the main according to model_name ('base', 'M2', 'M3')
+        self.activation         = 'sigmoid' # only used if model_dim = 2D ('softmax' or 'sigmoid')
+        
+        self.n_channels         = 3         # input chanels
+        self.p_dropout          = 0.2       # dropout probability
+        self.threshold          = 0.75      # Static threshold to make segmentation
         
         # train
         self.epochs             = 50
@@ -42,32 +44,39 @@ class Settings(object):
         self.lr_decay_factor    = 1e-4
         
         # loader - test
-        self.loadPath           = os.path.join('TrainResult', self.model_name , 'baseline', 'mdl_baseline_highway49.pth')
-        self.plot_test          = True
+        #self.loadPath           = os.path.join('TrainResult', self.model_name , 'baseline', 'mdl_baseline_highway49.pth')
+        self.loadPath           = os.path.join('TrainResult', self.model_name)
+        self.plot_test          = False
+        self.log_test           = True
+        
         
         # tensorboard
-        #self.logdir             = "logs_tensorboard/New_results/Training_loss_"+ self.model_name+"_" + datetime.now().strftime("%d-%m-%Y_%H-%M-%S") + "/"
-        self.logdir             = "logs_tensorboard/__results_all_dirs/" + self.model_name + "/"
-        self.view_batch         = 100                                     # print losses every n batches
+        #self.logdir             = "logs_tensorboard/New_results/" + self.model_name+"_" + datetime.now().strftime("%d-%m-%Y_%H-%M-%S") + "/"
+        self.logdir             = "logs_tensorboard/__results_all_dirs/" + self.model_name +"/"
+        self.view_batch         = 10                                     # print losses every n batches
         
         
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~ settings dataset ~~~~~~~~~~~~~~~~~~~~~~~~~~~
         
         self.dataset_dir        = os.path.join('..', '..', 'CDnet2014_dataset')
         self.data_format        = 'channels_last'
-        self.framesBack         = 5
+        self.framesBack         = 4
+        self.differenceFrames   = True    # Used only when framesBack > 0, It additions the framesback with the difference of the current frame
+        self.showSample         = True
+        self.dataset_fg_bg      = False   # To generate a 2 chanel gt, one for background an another one for foreground
         
-        self.resize             = True   # If the frames will be resized
-        self.width              = 240    # width of the frame
-        self.height             = 320    # height of the frame
+        self.resize             = True    # If the frames will be resized
+        self.width              = 240     # width of the frame
+        self.height             = 320     # height of the frame
         
-        self.dataset_range      = False   # If true, uses trainStart - trainEnd to dataset
-        self.trainStart         = 1
-        self.trainEnd           = 100
+        self.dataset_range      = False    # If true, uses trainStart - trainEnd to dataset
+        self.trainStart         = 200 
+        self.trainEnd           = 260
         
         # splits of dataset
         self.train_split        = 0.6
         self.val_split          = 0.1
+        
         
         # dictionary of catergories and scenes of the Cdnet2014
         
@@ -75,14 +84,14 @@ class Settings(object):
         #  -- REVISAR PEDESTRIANS, FALL, 0 F-MEASURE EN VAL
         #  -- REVISAR FOUNTAIN, CARGA MAL EL GROUNDTRUTH
         
-        self.dataset            = {
-            'baseline':['highway']
-        }
-        
         # self.dataset            = {
-        #     'baseline':['highway', 'pedestrians', 'office', 'PETS2006'],
-        #     'dynamicBackground':['canoe', 'fall'],
+        #     'dynamicBackground':['fall']
         # }
+        
+        self.dataset            = {
+            'baseline':['highway', 'pedestrians', 'office', 'PETS2006'],
+            'dynamicBackground':['canoe', 'fall']
+        }
         
         # self.dataset            = {
         #     'baseline':['highway', 'pedestrians', 'office', 'PETS2006'],

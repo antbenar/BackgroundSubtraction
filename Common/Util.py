@@ -2,6 +2,7 @@ import os
 import glob
 import argparse
 import datetime
+import math
 import torch 
 import torch.nn          as nn
 import matplotlib.pyplot as plt
@@ -31,9 +32,10 @@ class Averager():
             self.mean  = 0
         self.count = 0
     def update(self,val):
-        n = self.count
-        self.count = n + 1
-        self.mean  = (self.mean*n + val)/self.count
+        if(val != 0):
+            n = self.count
+            self.count = n + 1
+            self.mean  = (self.mean*n + val)/self.count
     def val(self):
         return self.mean
     
