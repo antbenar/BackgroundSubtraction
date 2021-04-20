@@ -1,11 +1,11 @@
 import torch
 import logging
-from config                      import Settings
-from trainTest                   import ModelTrainTest
-from Model.Base_model            import Net
-from Model.Base2D.Base2D_model   import Net2D
+from config                                  import Settings
+from trainTest                               import ModelTrainTest
+from Model.Base_model                        import Net
+from Model.Base2D.Base2D_model               import Net2D
+from Model.Multiscale2D.Multiscale2D_model   import MultiscaleNet2D
 #from Model.Unet2D.Unet2D_model  import Net
-from termcolor                   import colored
 
 class Main():
     """ Constructor """
@@ -56,7 +56,7 @@ class Main():
     #----------------------------------------------------------------------------------------
     # Instance Model
     #----------------------------------------------------------------------------------------
-      
+    
     def _init_model(self):
         if (self.settings.model_name == 'Model_M1-2D-LSTM'):
             self.settings.framesBack          = 0
@@ -82,18 +82,45 @@ class Main():
                 up_mode    = self.settings.up_mode,
                 activation = self.settings.activation
             )
-        elif (self.settings.model_name == 'Model_M2-2D-LSTM'):
-            #not yet implemented
+        elif (self.settings.model_name == 'Model_Multiscale-2D'):
+            # parameters of the dataset
             self.settings.framesBack          = 0
             self.settings.dataset_fg_bg       = False
             self.settings.model_dim           = '2D'
             self.settings.activation          = 'sigmoid'
-            self.settings.up_mode             = 'M2'
-            self.net = Net2D(
+            # model
+            self.net = MultiscaleNet2D(
                 self.settings.n_channels, 
                 self.settings.p_dropout,
-                up_mode    = self.settings.up_mode,
-                activation = self.settings.activation
+                up_mode    = 'base',
+                activation = 'sigmoid'
+            )
+        elif (self.settings.model_name == 'Model_Multiscale-2D_softmax'):
+            # parameters of the dataset
+            self.settings.framesBack          = 0
+            self.settings.dataset_fg_bg       = True
+            self.settings.model_dim           = '2D'
+            self.settings.activation          = 'softmax'
+            # model
+            self.net = MultiscaleNet2D(
+                self.settings.n_channels, 
+                self.settings.p_dropout,
+                up_mode    = 'base',
+                activation = 'softmax'
+            )
+        elif (self.settings.model_name == 'Model_Multiscale-2D_softmax_noattention'):
+            # parameters of the dataset
+            self.settings.framesBack          = 0
+            self.settings.dataset_fg_bg       = True
+            self.settings.model_dim           = '2D'
+            self.settings.activation          = 'softmax'
+            # model
+            self.net = MultiscaleNet2D(
+                self.settings.n_channels, 
+                self.settings.p_dropout,
+                up_mode    = 'base',
+                activation = 'softmax',
+                attention  = False
             )
         elif (self.settings.model_name == 'Model_M2'):
             self.settings.framesBack          = self.settings.framesBack
@@ -131,8 +158,8 @@ if __name__ == "__main__":
     # Instance model
     main._init_model()
     
-    #main.execute(mode='train_val')
-    main.execute(mode='test')
+    main.execute(mode='train_val')
+    # main.execute(mode='test')
     #main.execute(mode='train_val_test')
     #main.saveTrainData()
     #main.calculateModelSize()

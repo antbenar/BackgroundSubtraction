@@ -167,7 +167,7 @@ class GenerateData(Dataset):
             tmp2 = data[i:i+n_look_back]
             if tmp.shape[0] == n_look_back:
                 for rotate_channel_id in range(0, n_look_back): # rotate the channels such that bring the current input as first channel
-                    tmp[rotate_channel_id] = tmp[n_look_back-1-rotate_channel_id]
+                    tmp[rotate_channel_id] = tmp2[n_look_back-1-rotate_channel_id]
                     
                 tmp = tmp.reshape(1, n_look_back, data.shape[1], data.shape[2], data.shape[3])
                 data_5d[k] = tmp

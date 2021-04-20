@@ -18,7 +18,7 @@ class Settings(object):
         
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~ settings model ~~~~~~~~~~~~~~~~~~~~~~~~~~~
         
-        self.model_name         = 'Model_M1-2D-LSTM_softmax'
+        self.model_name         = 'Model_Multiscale-2D_softmax_noattention'
         self.model_dim          = '2D'      # dimension of the model
         self.up_mode            = 'base'    # It changes in the main according to model_name ('base', 'M2', 'M3')
         self.activation         = 'sigmoid' # only used if model_dim = 2D ('softmax' or 'sigmoid')
@@ -60,7 +60,7 @@ class Settings(object):
         
         self.dataset_dir        = os.path.join('..', '..', 'CDnet2014_dataset')
         self.data_format        = 'channels_last'
-        self.framesBack         = 4
+        self.framesBack         = 5
         self.differenceFrames   = True    # Used only when framesBack > 0, It additions the framesback with the difference of the current frame
         self.showSample         = True
         self.dataset_fg_bg      = False   # To generate a 2 chanel gt, one for background an another one for foreground
@@ -81,12 +81,16 @@ class Settings(object):
         # dictionary of catergories and scenes of the Cdnet2014
         
         #  -- REVISAR BOATS (MUY LARGA)
-        #  -- REVISAR PEDESTRIANS, FALL, 0 F-MEASURE EN VAL
         #  -- REVISAR FOUNTAIN, CARGA MAL EL GROUNDTRUTH
         
         # self.dataset            = {
         #     'dynamicBackground':['fall']
         # }
+        
+        # self.dataset            = {
+        #     'baseline':['highway']
+        # }
+        
         
         self.dataset            = {
             'baseline':['highway', 'pedestrians', 'office', 'PETS2006'],

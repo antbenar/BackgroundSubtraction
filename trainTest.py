@@ -10,7 +10,6 @@ from Common.Util                         import ModelSize
 from torch.utils.tensorboard             import SummaryWriter
 from matplotlib                          import pyplot as plt
 from tqdm                                import tqdm
-from PIL                                 import Image
 
 class ModelTrainTest(nn.Module):
     def __init__(self, net, settings):
@@ -167,16 +166,16 @@ class ModelTrainTest(nn.Module):
     # Loss function
     #----------------------------------------------------------------------------------------
     
-    def _bce_loss(self, prediction_, groundtruth_):
+    def _bce_loss(self, prediction_, groundtruth_):# (5,2,240,320)
         void_label  = -1.
         prediction  = torch.reshape(prediction_, (-1,))
         groundtruth = torch.reshape(groundtruth_, (-1,))
         
-        mask        = torch.where(groundtruth == void_label, False, True)
+        mask        = torch.where(groundtruth == void_label, False, True) # [0,1,1,0]
         
         prediction  = torch.masked_select(prediction, mask)
-        groundtruth = torch.masked_select(groundtruth, mask)
-
+        groundtruth = torch.masked_select(groundtruth, mask) 
+        
         loss        = F.binary_cross_entropy(prediction, groundtruth, reduction='mean')
         return loss
         
@@ -189,7 +188,7 @@ class ModelTrainTest(nn.Module):
         # loss
         running_loss = 0.0 
         lossTrain    = Averager()
-        with tqdm(total=len(train_loader),leave=False) as pbar:
+        with tqdm(total=len(train_loader),leave=True, desc="Epoch %d/%d" % (epoch,self.epochs)) as pbar:
             for i_batch, sample_batched  in enumerate(train_loader):
                 # get the inputs; data is a list of [inputs, labels]
                 inputs      = sample_batched['inputs'].to(self.device)
@@ -212,9 +211,8 @@ class ModelTrainTest(nn.Module):
                 view_batch        = self.view_batch
                 
                 if (i_batch+1) % view_batch == 0:  # print every 2000 mini-batches
-                    #print('[%d, %5d] loss: %.3f' % (epoch + 1, i_batch + 1, running_loss / view_batch))
                     running_loss = 0.0
-                    pbar.set_description( 'Train loss=%.7f' % ( running_loss / view_batch ))
+                    pbar.set_postfix({'Train loss':  '%.4f'%lossTrain.mean})
                     pbar.refresh()
                     
                 pbar.update()
@@ -225,7 +223,6 @@ class ModelTrainTest(nn.Module):
                 
             pbar.close()
         lossTrain = lossTrain.val()
-        print("---- Epoch training loss:",lossTrain)
         return lossTrain
         
     
@@ -242,7 +239,7 @@ class ModelTrainTest(nn.Module):
         avgFmeasure  = Averager()
         avgPWC       = Averager()
         
-        with tqdm(total=len(val_loader),leave=False) as pbar:
+        with tqdm(total=len(val_loader),leave=True, desc="Epoch %d/%d" % (epoch,self.epochs)) as pbar:
             for i_batch, sample_batched  in enumerate(val_loader):
                 # get the inputs; data is a list of [inputs, labels]
                 inputs      = sample_batched['inputs'].to(self.device)
@@ -265,12 +262,11 @@ class ModelTrainTest(nn.Module):
                 view_batch = self.view_batch
                 
                 if (i_batch+1) % view_batch == 0:  # print every 2000 mini-batches
-                    #print('[%d, %5d] loss: %.3f' % (epoch + 1, i_batch + 1, running_loss / view_batch))
                     running_loss = 0.0
-                    pbar.set_description( 'Val loss=%.7f, f-measure=%.4f, PWC=%.4f' % ( running_loss / view_batch,  avgFmeasure.mean, avgPWC.mean))
+                    pbar.set_postfix({'Val loss':  '%.4f'%lossVal.val(), 'f-measure':  '%.4f'%avgFmeasure.mean,'PWC':  '%.4f'%avgPWC.mean})
                     pbar.refresh()
                     
-                pbar.update()
+                pbar.update() 
                 pbar.refresh()
                     
                 lossVal.update(runtime_loss)
@@ -279,9 +275,9 @@ class ModelTrainTest(nn.Module):
                 
             pbar.close()
             
-        lossVal = lossVal.val()
-        
-        print("Epoch val train loss:",lossVal, ", f-measure:", avgFmeasure.mean, ", PWC:", avgPWC.mean)
+        lossVal     = lossVal.val()
+        avgFmeasure = avgFmeasure.mean
+        avgPWC = avgPWC.mean
         return lossVal, avgFmeasure, avgPWC
     
     
@@ -293,14 +289,12 @@ class ModelTrainTest(nn.Module):
         category = self.category 
         scene    = self.scene
             
-        print("~~~~~~~ Training ->>> " + category + " / " + scene + " ~~~~~~~~~~")
+        print("\n~~~~~~~ Training ->>> " + category + " / " + scene + " ~~~~~~~~~~\n")
         tb = SummaryWriter(self.logdir +'/' + category + '_' + scene)
         
-        for epoch in range(self.epochs):  # loop over the dataset multiple times
-            print("Epoch = ", epoch, "-"*40)
-            
-            lossTrain       = self._train(epoch, train_loader)
-            lossValid, metr = self._validation(epoch, val_loader)
+        for epoch in range(self.epochs):  # loop over the dataset multiple times            
+            lossTrain                = self._train(epoch, train_loader)
+            lossValid, fmeasure, pwc = self._validation(epoch, val_loader)
             
             if(self.scheduler_active):
                 self.scheduler.step()
@@ -308,8 +302,8 @@ class ModelTrainTest(nn.Module):
             # add scalars to tensorboard
             tb.add_scalar('Loss/Train'        ,   lossTrain, epoch)
             tb.add_scalar('Loss/Validation'   ,   lossValid, epoch)
-            tb.add_scalar('Metrics/Val/F-Measure' , metr[0], epoch)
-            tb.add_scalar('Metrics/Val/PWC'       , metr[1], epoch)
+            tb.add_scalar('Metrics/Val/F-Measure' , fmeasure, epoch)
+            tb.add_scalar('Metrics/Val/PWC'       , pwc, epoch)
             
             # Save checkpoint
             if epoch%2 == 0 or epoch == (self.epochs -1):
@@ -340,7 +334,7 @@ class ModelTrainTest(nn.Module):
         avgPWC       = Averager()
         step_view = len(test_loader)//5
         
-        with tqdm(total=len(test_loader),leave=False) as pbar:
+        with tqdm(total=len(test_loader),leave=False,desc='Test') as pbar:
             for i_step, sample_batched  in enumerate(test_loader):
                 # get the inputs; data is a list of [inputs, labels]
                 inputs      = sample_batched['inputs'].to(self.device)
@@ -377,8 +371,8 @@ class ModelTrainTest(nn.Module):
                         dim5D = self.framesBack > 0
                         tensorBoardTool = TensorBoardTool(dir_tb, dim5D)
                         tensorBoardTool.saveImgTest(self.model_name, (i_step+1)//step_view, inputs, groundtruth, prediction)
-                                        
-                    pbar.set_description( 'Test metrics f-measure=%.4f, PWC=%.4f' % (avgFmeasure.mean, avgPWC.mean))
+                        
+                    pbar.set_postfix({'f-measure':  '%.4f'%avgFmeasure.mean,'PWC':  '%.4f'%avgPWC.mean})
                 pbar.update()
                 pbar.refresh()
                 

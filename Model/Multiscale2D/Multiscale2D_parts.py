@@ -3,6 +3,32 @@ import torch.nn              as nn
 import torch.nn.functional   as F
 from Model.ConvLstm          import ConvLSTM
 
+
+#----------------------------------------------------------------------------------------
+# PSPModule 
+# from https://github.com/Lextal/pspnet-pytorch/blob/4eb6ab61287e837f5e2d8c1ae09fadeaa0e31e37/pspnet.py#L16
+#----------------------------------------------------------------------------------------
+
+class PSPModule(nn.Module):
+    def __init__(self, features=2048, out_features=1024, sizes=(1, 2, 3, 6)):
+        super().__init__()
+        self.stages = []
+        self.stages = nn.ModuleList([self._make_stage(features, size) for size in sizes])
+        self.bottleneck = nn.Conv2d(features * (len(sizes) + 1), out_features, kernel_size=1)
+        self.relu = nn.ReLU()
+
+    def _make_stage(self, features, size):
+        prior = nn.AdaptiveAvgPool2d(output_size=(size, size))
+        conv = nn.Conv2d(features, features, kernel_size=1, bias=False)
+        return nn.Sequential(prior, conv)
+
+    def forward(self, feats):
+        h, w = feats.size(2), feats.size(3)
+        priors = [F.upsample(input=stage(feats), size=(h, w), mode='bilinear') for stage in self.stages] + [feats]
+        bottle = self.bottleneck(torch.cat(priors, 1))
+        return self.relu(bottle)
+
+ 
 #----------------------------------------------------------------------------------------
 # Conv2dSigmoid
 #----------------------------------------------------------------------------------------
@@ -159,12 +185,13 @@ class Attention(nn.Module):
 class Up2D(nn.Module):
     """Blocks of decoder"""
 
-    def __init__(self, in_channels=64,  out_channels=64, kernel_size_convT=(2, 2), stride_convT=(2, 2), padding_convT=(0,0)):
+    def __init__(self, in_channels=64,  out_channels=64, attention=True, kernel_size_convT=(2, 2), stride_convT=(2, 2), padding_convT=(0,0)):
         super().__init__()
         #To obtain the number of output chanels, the last convolution must be equal to the 
         #difference of channels of the result with the concatenation tensor
-        out_channels -= 32
-                                                                                                                             
+        out_channels           -= 32
+        self.use_attention      = attention
+                                                                                                                     
         self.convTranspose2d    = nn.ConvTranspose2d(in_channels=in_channels, out_channels=16, kernel_size=kernel_size_convT, stride=stride_convT, padding=padding_convT)
         self.atention           = Attention(in_channels_tensor=32, in_channels_att_tensor=16, out_channels=16)
         #concat ->      32 + 16 = 48 channels
@@ -175,7 +202,8 @@ class Up2D(nn.Module):
         
     def forward(self, input_tensor, prev_tensor1, prev_tensor2) :
         x = self.convTranspose2d(input_tensor)        
-        x = self.atention(prev_tensor1, x)
+        if(self.use_attention):
+            x = self.atention(prev_tensor1, x)
         x = torch.cat([prev_tensor1, x], dim=1)
         x = self.conv2d(x)
         x = self.batchNormalization(x)
@@ -191,9 +219,10 @@ class Up2D(nn.Module):
 class Up2D_2(nn.Module):
     """Blocks of decoder"""
 
-    def __init__(self, in_channels=64,  out_channels=32, p_dropout=0.2):
+    def __init__(self, in_channels=64,  out_channels=32, p_dropout=0.2, attention=True):
         super().__init__()
         self.convTranspose2d    = nn.ConvTranspose2d(in_channels=in_channels, out_channels=16, kernel_size=(2, 2), stride=(2, 2), padding=(0, 0))
+        self.use_attention      = attention
         self.atention           = Attention(in_channels_tensor=16, in_channels_att_tensor=16, out_channels=16)
         #concat ->      16 + 16 = 32 channels
         self.conv2d             = nn.Conv2d(in_channels=32, out_channels=out_channels, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
@@ -203,7 +232,8 @@ class Up2D_2(nn.Module):
         
     def forward(self, input_tensor, prev_tensor) :
         x = self.convTranspose2d(input_tensor)
-        x = self.atention(prev_tensor, x)
+        if(self.use_attention):
+            x = self.atention(prev_tensor, x)
         x = torch.cat([prev_tensor, x], dim=1)
         x = self.conv2d(x)
         x = self.batchNormalization(x)
