@@ -88,6 +88,7 @@ class Main():
             self.settings.dataset_fg_bg       = False
             self.settings.model_dim           = '2D'
             self.settings.activation          = 'sigmoid'
+            self.settings.up_mode             = 'base'
             # model
             self.net = MultiscaleNet2D(
                 self.settings.n_channels, 
@@ -101,11 +102,26 @@ class Main():
             self.settings.dataset_fg_bg       = True
             self.settings.model_dim           = '2D'
             self.settings.activation          = 'softmax'
+            self.settings.up_mode             = 'base'
             # model
             self.net = MultiscaleNet2D(
                 self.settings.n_channels, 
                 self.settings.p_dropout,
                 up_mode    = 'base',
+                activation = 'softmax'
+            )
+        elif (self.settings.model_name == 'Model_Multiscale_M2-2D_softmax'):
+            # parameters of the dataset
+            self.settings.framesBack          = 0
+            self.settings.dataset_fg_bg       = True
+            self.settings.model_dim           = '2D'
+            self.settings.activation          = 'softmax'
+            self.settings.up_mode             = 'M2'
+            # model
+            self.net = MultiscaleNet2D(
+                self.settings.n_channels, 
+                self.settings.p_dropout,
+                up_mode    = self.settings.up_mode,
                 activation = 'softmax'
             )
         elif (self.settings.model_name == 'Model_Multiscale-2D_softmax_noattention'):
@@ -114,6 +130,7 @@ class Main():
             self.settings.dataset_fg_bg       = True
             self.settings.model_dim           = '2D'
             self.settings.activation          = 'softmax'
+            self.settings.up_mode             = 'base'
             # model
             self.net = MultiscaleNet2D(
                 self.settings.n_channels, 
@@ -151,16 +168,25 @@ class Main():
         
 if __name__ == "__main__":
     # Setting  
-    settings    = Settings()
-
-    main = Main(settings)
+    # settings    = Settings()
+    # main = Main(settings)
+    # main._init_model()
     
-    # Instance model
-    main._init_model()
-    
-    main.execute(mode='train_val')
+    # main.execute(mode='train_val')
     # main.execute(mode='test')
-    #main.execute(mode='train_val_test')
     #main.saveTrainData()
     #main.calculateModelSize()
     
+    
+    # models = [ 'Model_M1-2D-LSTM', 'Model_M1-2D-LSTM_softmax',
+    #           'Model_Multiscale-2D', 'Model_Multiscale-2D_softmax', 'Model_Multiscale_M2-2D_softmax', 
+    #           'Model_Multiscale-2D_softmax_noattention']
+    
+    models = ['Model_M1']
+     
+    for model in models:
+        settings    = Settings(model)
+        main        = Main(settings)
+        main._init_model()
+        main.execute(mode='test')
+        

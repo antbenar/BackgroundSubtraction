@@ -28,7 +28,7 @@ class PSPModule(nn.Module):
         bottle = self.bottleneck(torch.cat(priors, 1))
         return self.relu(bottle)
 
- 
+
 #----------------------------------------------------------------------------------------
 # Conv2dSigmoid
 #----------------------------------------------------------------------------------------
@@ -243,3 +243,39 @@ class Up2D_2(nn.Module):
     
     
     
+#----------------------------------------------------------------------------------------
+# PARTS OF THE UPSAMPLING OF THE MODEL 2
+#----------------------------------------------------------------------------------------
+
+#----------------------------------------------------------------------------------------
+# Up 
+# --- PARTS OF THE UPSAMPLING OF THE MODEL 2
+#----------------------------------------------------------------------------------------    
+    
+class UpM2(nn.Module):
+    """Blocks of decoder"""
+
+    def __init__(self, in_channels=64,  out_channels=64, attention=True, kernel_size_convT=(2, 2), stride_convT=(2, 2), padding_convT=(0,0)):
+        super().__init__()
+        #To obtain the number of output chanels, the last convolution must be equal to the 
+        #difference of channels of the result with the concatenation tensor
+        out_channels           -= 32
+        self.use_attention      = attention
+                                                                                                                     
+        self.convTranspose2d    = nn.ConvTranspose2d(in_channels=in_channels, out_channels=16, kernel_size=kernel_size_convT, stride=stride_convT, padding=padding_convT)
+        self.atention           = Attention(in_channels_tensor=32, in_channels_att_tensor=16, out_channels=16)
+        #concat ->      32 + 16 = 48 channels
+        self.conv2d             = nn.Conv2d(in_channels=48, out_channels=out_channels, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+        self.batchNormalization = nn.BatchNorm2d(out_channels)
+        self.relu               = nn.ReLU()
+        #concat ->      32 + 32 = 64 channels
+        
+    def forward(self, input_tensor, prev_tensor1, prev_tensor2) :
+        x = self.convTranspose2d(input_tensor)        
+        if(self.use_attention):
+            x = self.atention(prev_tensor1, x)
+        x = torch.cat([prev_tensor1, x], dim=1)
+        x = self.conv2d(x)
+        x = self.batchNormalization(x)
+        x = self.relu(x)
+        return x

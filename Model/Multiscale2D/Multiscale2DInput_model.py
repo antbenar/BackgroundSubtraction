@@ -40,10 +40,10 @@ class MultiscaleNet2D(nn.Module):
             self.upBlock3    =           Up2D(64, 64)
             self.upBlock4    =         Up2D_2(64, 16, p_dropout) 
         elif(up_mode == 'M2'):
-            self.upBlock1    =           Up2D(16, 64, kernel_size_convT=(3, 3), stride_convT=(1, 1), padding_convT=(1,1), attention=self.attention)
-            self.upBlock2    =           Up2D(64, 64, attention=self.attention)
-            self.upBlock3    =           Up2D(64, 64, attention=self.attention)
-            self.upBlock4    =         Up2D_2(64, 16, p_dropout, attention=self.attention)
+            self.upBlock1    =           Up2D(16, 32, kernel_size_convT=(3, 3), stride_convT=(1, 1), padding_convT=(1,1), attention=self.attention)
+            self.upBlock2    =           Up2D(32, 32, attention=self.attention)
+            self.upBlock3    =           Up2D(32, 32, attention=self.attention)
+            self.upBlock4    =         Up2D_2(32, 16, p_dropout, attention=self.attention)
         else:
             raise NotImplementedError('Unknown up_mode function.')
 

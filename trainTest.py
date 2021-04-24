@@ -1,4 +1,5 @@
 import os
+import csv
 import torch
 import torch.nn              as nn
 import torch.nn.functional   as F
@@ -10,7 +11,7 @@ from Common.Util                         import ModelSize
 from torch.utils.tensorboard             import SummaryWriter
 from matplotlib                          import pyplot as plt
 from tqdm                                import tqdm
-
+from termcolor                           import colored
 class ModelTrainTest(nn.Module):
     def __init__(self, net, settings):
         super().__init__()
@@ -352,7 +353,7 @@ class ModelTrainTest(nn.Module):
                 # plot
                 if(self.plot_test):
                     self.plotImgTest(i_step, inputs, groundtruth, prediction)
-                #self.saveImgTest(i_step, inputs, groundtruth, prediction)
+                self.saveImgTest(i_step, inputs, groundtruth, prediction)
                 
                 # Metrics
                 fmeasure, pwc = self._metrics(prediction, groundtruth)
@@ -382,7 +383,8 @@ class ModelTrainTest(nn.Module):
             pbar.close()
         
         print("Test metrics - f-measure:", avgFmeasure.mean, ", PWC:", avgPWC.mean)
-        return avgFmeasure, avgPWC
+        
+        return avgFmeasure.mean, avgPWC.mean
 
         
     #----------------------------------------------------------------------------------------
@@ -390,66 +392,69 @@ class ModelTrainTest(nn.Module):
     #----------------------------------------------------------------------------------------
     
     def _execute(self, mode):
-        # try:
-        category = self.category 
-        scene    = self.scene
-        #~~~~~~~~~~~~~~~~~~~~~ Load dataset for this scene ~~~~~~~~~~~~~~~~~~~~~
-        
-        print("~~~~~~~ Generating data ->>> " + category + " / " + scene + " ~~~~~~~~~~")
-
-        dataset_dir = os.path.join(self.dataset_dir, category, scene, 'input')
-        dataset_gt_dir = os.path.join(self.dataset_dir, category, scene, 'groundtruth')
-        
-        dataset = GenerateData(
-            dataset_gt_dir, dataset_dir,
-            framesBack    = self.framesBack,
-            resize        = self.resize,
-            width         = self.width,
-            height        = self.height,
-            dataset_range = self.dataset_range,
-            trainStart    = self.trainStart,
-            trainEnd      = self.trainEnd,
-            data_format   = self.data_format,
-            dataset_fg_bg = self.dataset_fg_bg,
-            showSample    = self.showSample,
-            differenceFrames = self.differenceFrames
-        )
-        
-        train_loader, val_loader, test_loader = dataset.train_val_test_split(
-                                                    self.train_split,
-                                                    self.val_split,
-                                                    self.shuffle,
-                                                    self.batch_size,
-                                                    self.num_workers
-                                                  )
-        
-        if(mode == 'train_val'):
-            self._train_val(train_loader, val_loader)
-        elif(mode == 'train_val_test'):
-            self._train_val(train_loader, val_loader)
-            self._test(test_loader)
-        elif(mode == 'test'):
-            loadpath = os.path.join(self.loadPath, category, 'mdl_'+category+'_'+scene+'49.pth')
-            self.load(loadpath)
-            self._test(test_loader)
-        else: 
-            raise NameError('Mode (' + mode + ') not valid')
-        
-        del dataset, train_loader, val_loader, test_loader
-        torch.cuda.empty_cache()
-        
-        
+        try:
+            category      = self.category 
+            scene         = self.scene
+            fmeasure, PWC = 0, 0
+            
+            #~~~~~~~~~~~~~~~~~~~~~ Load dataset for this scene ~~~~~~~~~~~~~~~~~~~~~
+            
+            print("~~~~~~~ Generating data ->>> " + category + " / " + scene + " ~~~~~~~~~~")
+    
+            dataset_dir = os.path.join(self.dataset_dir, category, scene, 'input')
+            dataset_gt_dir = os.path.join(self.dataset_dir, category, scene, 'groundtruth')
+            
+            dataset = GenerateData(
+                dataset_gt_dir, dataset_dir,
+                framesBack    = self.framesBack,
+                resize        = self.resize,
+                width         = self.width,
+                height        = self.height,
+                dataset_range = self.dataset_range,
+                trainStart    = self.trainStart,
+                trainEnd      = self.trainEnd,
+                data_format   = self.data_format,
+                dataset_fg_bg = self.dataset_fg_bg,
+                showSample    = self.showSample,
+                differenceFrames = self.differenceFrames
+            )
+            
+            train_loader, val_loader, test_loader = dataset.train_val_test_split(
+                                                        self.train_split,
+                                                        self.val_split,
+                                                        self.shuffle,
+                                                        self.batch_size,
+                                                        self.num_workers
+                                                      )
+            
+            if(mode == 'train_val'):
+                self._train_val(train_loader, val_loader)
+            elif(mode == 'train_val_test'):
+                self._train_val(train_loader, val_loader)
+                self._test(test_loader)
+            elif(mode == 'test'):
+                loadpath = os.path.join(self.loadPath, category, 'mdl_'+category+'_'+scene+'49.pth')
+                # loadpath = self.loadPath
+                self.load(loadpath)
+                fmeasure, PWC = self._test(test_loader)
+            else: 
+                raise NameError('Mode (' + mode + ') not valid')
+            
+            del dataset, train_loader, val_loader, test_loader
+            torch.cuda.empty_cache()
+            
+            return fmeasure, PWC
         
         
        
-        # except RuntimeError as err:
-        #     if(self.batch_size > 1):
-        #         self.batch_size -= 1
-        #         print('===============reducing batch size to:', self.batch_size)                  
-        #         return  self._execute()
-        #     else:
-        #         print(colored('='*20, 'red'))
-        #         print(colored('RuntimeError', 'red'), err)
+        except RuntimeError as err:
+            if(self.batch_size > 1):
+                self.batch_size -= 1
+                print('===============reducing batch size to:', self.batch_size)                  
+                return  self._execute()
+            else:
+                print(colored('='*20, 'red'))
+                print(colored('RuntimeError', 'red'), err)
                   
                 
     #----------------------------------------------------------------------------------------
@@ -459,20 +464,57 @@ class ModelTrainTest(nn.Module):
     def execute(self, mode):
         
         print('~~~~~~~~~~~~~~ Current method >>> ' + self.model_name)
-                
+        csvHeader      = ['Name model']
+        csvRowFmeasure = [self.model_name]
+        csvRowPWC      = [self.model_name]
+        
         # Go through each scene
         for category, scene_list in self.dataset.items():     
             for scene in scene_list:
                 self.category = category
                 self.scene    = scene
                 
-                try:
-                    self._execute(mode)
-                except ValueError as err:
-                    print("Error: ", err)
+                # try:
+                fmeasure, PWC = self._execute(mode)
+                
+                if(mode == 'test'):
+                    # save csv
+                    csvHeader.append(scene)
+                    csvRowFmeasure.append(fmeasure)
+                    csvRowPWC.append(PWC)
                     
-                
-                
+                # except ValueError as err:
+                #     print("Error: ", err)
+        
+        if(mode == 'test'):
+            self.saveCsvFile(csvHeader, csvRowFmeasure, csvRowPWC)
+     
+        
+    #----------------------------------------------------------------------------------------
+    # Function to write csv file
+    #----------------------------------------------------------------------------------------            
+    
+    def saveCsvFile(self, csvHeader, csvRowFmeasure, csvRowPWC):
+        csvPath = os.path.join('csv','CDnet2014')
+        csvFmeasurePath = os.path.join('csv','CDnet2014','fmeasure.csv')
+        csvPWCPath = os.path.join('csv','CDnet2014','pwc.csv')
+        
+        if not os.path.exists(csvPath):
+            os.makedirs(csvPath)
+            
+        with open(csvFmeasurePath,'a+', newline='') as csv_test_file:
+            test_writer = csv.writer(csv_test_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            if os.stat(csvFmeasurePath).st_size == 0:
+                test_writer.writerow(csvHeader)
+            test_writer.writerow(csvRowFmeasure)  
+            
+        with open(csvPWCPath,'a+', newline='') as csv_test_file:
+            test_writer = csv.writer(csv_test_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            if os.stat(csvPWCPath).st_size == 0:
+                test_writer.writerow(csvHeader)
+            test_writer.writerow(csvRowPWC)  
+              
+            
     #----------------------------------------------------------------------------------------
     # Function to iterate over categories and scenes to save the data with tensorboard
     #----------------------------------------------------------------------------------------

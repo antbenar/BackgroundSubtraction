@@ -23,6 +23,7 @@ TestResult/
 runs/
 .pylint.d/
 logs_tensorboard/
+csv/
 
 # python
 __pycache__

@@ -4,7 +4,7 @@ from datetime import datetime
 
 class Settings(object):
     
-    def __init__(self):
+    def __init__(self, model_name = 'Model_M1'):
         super().__init__()
         
         # Device
@@ -18,10 +18,10 @@ class Settings(object):
         
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~ settings model ~~~~~~~~~~~~~~~~~~~~~~~~~~~
         
-        self.model_name         = 'Model_Multiscale-2D_softmax_noattention'
-        self.model_dim          = '2D'      # dimension of the model
-        self.up_mode            = 'base'    # It changes in the main according to model_name ('base', 'M2', 'M3')
-        self.activation         = 'sigmoid' # only used if model_dim = 2D ('softmax' or 'sigmoid')
+        self.model_name         = model_name
+        self.model_dim          = '2D'        # dimension of the model
+        self.up_mode            = 'base'        # It changes in the main according to model_name ('base', 'M2', 'M3')
+        self.activation         = 'sigmoid'        # only used if model_dim = 2D ('softmax' or 'sigmoid')
         
         self.n_channels         = 3         # input chanels
         self.p_dropout          = 0.2       # dropout probability
@@ -47,7 +47,7 @@ class Settings(object):
         #self.loadPath           = os.path.join('TrainResult', self.model_name , 'baseline', 'mdl_baseline_highway49.pth')
         self.loadPath           = os.path.join('TrainResult', self.model_name)
         self.plot_test          = False
-        self.log_test           = True
+        self.log_test           = False
         
         
         # tensorboard
@@ -83,19 +83,19 @@ class Settings(object):
         #  -- REVISAR BOATS (MUY LARGA)
         #  -- REVISAR FOUNTAIN, CARGA MAL EL GROUNDTRUTH
         
-        # self.dataset            = {
-        #     'dynamicBackground':['fall']
-        # }
+        self.dataset            = {
+            'dynamicBackground':['fall']
+        }
         
         # self.dataset            = {
         #     'baseline':['highway']
         # }
         
         
-        self.dataset            = {
-            'baseline':['highway', 'pedestrians', 'office', 'PETS2006'],
-            'dynamicBackground':['canoe', 'fall']
-        }
+        # self.dataset            = {
+        #     'baseline':['highway', 'pedestrians', 'office', 'PETS2006'],
+        #     'dynamicBackground':['canoe', 'fall']
+        # }
         
         # self.dataset            = {
         #     'baseline':['highway', 'pedestrians', 'office', 'PETS2006'],
