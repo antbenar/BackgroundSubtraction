@@ -5,7 +5,7 @@ from trainTest                               import ModelTrainTest
 from Model.Base_model                        import Net
 from Model.Base2D.Base2D_model               import Net2D
 from Model.Multiscale2D.Multiscale2D_model   import MultiscaleNet2D
-#from Model.Unet2D.Unet2D_model  import Net
+from Model.LoGo2D.LoGo2D_model               import LoGoNet2D
 
 class Main():
     """ Constructor """
@@ -13,6 +13,7 @@ class Main():
         super().__init__()
         logging.getLogger('tensorflow').setLevel(logging.ERROR)
         self.settings = settings
+        self._init_model()
         
         
     #----------------------------------------------------------------------------------------
@@ -70,7 +71,7 @@ class Main():
                 up_mode    = self.settings.up_mode,
                 activation = self.settings.activation
             )
-        elif (self.settings.model_name == 'Model_M1-2D-LSTM_softmax'):
+        elif (self.settings.model_name == 'Model_M1-2D-LSTM_softmax' or self.settings.model_name == 'Model_M1-2D-LSTM_softmax_dobleLoss'):
             self.settings.framesBack          = 0
             self.settings.dataset_fg_bg       = True
             self.settings.model_dim           = '2D'
@@ -160,33 +161,39 @@ class Main():
                 self.settings.n_channels, 
                 self.settings.p_dropout, 
                 up_mode= self.settings.up_mode
-            )   
+            )  
+        elif (self.settings.model_name == 'Model_LoGo2D'):
+            self.settings.framesBack          = 0
+            self.settings.dataset_fg_bg       = False
+            self.settings.model_dim           = '2D'
+            self.settings.activation          = 'sigmoid'
+            self.settings.up_mode             = 'base'
+            self.net = LoGoNet2D(
+                self.settings.n_channels, 
+                self.settings.p_dropout,
+                up_mode    = self.settings.up_mode,
+                activation = self.settings.activation
+            )
         else:
             raise NotImplementedError('Model is not implemented')
         
         
         
 if __name__ == "__main__":
-    # Setting  
-    # settings    = Settings()
-    # main = Main(settings)
-    # main._init_model()
-    
-    # main.execute(mode='train_val')
-    # main.execute(mode='test')
-    #main.saveTrainData()
-    #main.calculateModelSize()
-    
     
     # models = [ 'Model_M1-2D-LSTM', 'Model_M1-2D-LSTM_softmax',
     #           'Model_Multiscale-2D', 'Model_Multiscale-2D_softmax', 'Model_Multiscale_M2-2D_softmax', 
-    #           'Model_Multiscale-2D_softmax_noattention']
+    #           'Model_Multiscale-2D_softmax_noattention', 'Model_LoGo2D', 'Model_M1-2D-LSTM_softmax_dobleLoss']
     
-    models = ['Model_M1']
+    # models = ['Model_M1-2D-LSTM', 'Model_M1-2D-LSTM_softmax','Model_Multiscale-2D', 'Model_Multiscale-2D_softmax']
      
+    models = ['Model_LoGo2D']
+    
     for model in models:
         settings    = Settings(model)
         main        = Main(settings)
-        main._init_model()
+        # main.execute(mode='train_val')
         main.execute(mode='test')
-        
+        #main.saveTrainData()
+        #main.calculateModelSize()
+    

@@ -38,11 +38,11 @@ class ModelTrainTest(nn.Module):
                                 step_size = self.lr_decay_steps,
                                 gamma     = self.lr_decay_factor
                             )
-
+        
         # set lost
         self.criterion_loss = self._bce_loss
         
-         
+        
     #----------------------------------------------------------------------------------------
     # Set settings
     #----------------------------------------------------------------------------------------
@@ -167,7 +167,7 @@ class ModelTrainTest(nn.Module):
     # Loss function
     #----------------------------------------------------------------------------------------
     
-    def _bce_loss(self, prediction_, groundtruth_):# (5,2,240,320)
+    def _bce_loss(self, prediction_, groundtruth_):# (5,2,240,320) -> (b,c,t,h,w)
         void_label  = -1.
         prediction  = torch.reshape(prediction_, (-1,))
         groundtruth = torch.reshape(groundtruth_, (-1,))
@@ -182,10 +182,39 @@ class ModelTrainTest(nn.Module):
         
     
     #----------------------------------------------------------------------------------------
+    # Loss function bg fg independently
+    #----------------------------------------------------------------------------------------
+  
+    
+    def _bce_loss_fgbg(self, prediction_, groundtruth_):
+        # (b,c,h,w) -> (c,b,h,w)
+        prediction  = prediction_.permute(1, 0, 2, 3)
+        groundtruth = groundtruth_.permute(1, 0, 2, 3)
+        
+        prediction_bg  = prediction[0]
+        groundtruth_bg = groundtruth[0]
+        
+        prediction_fg  = prediction[1]
+        groundtruth_fg = groundtruth[1]
+    
+        loss_fg = self._bce_loss(prediction_bg, groundtruth_bg)
+        loss_bg = self._bce_loss(prediction_fg, groundtruth_fg)
+        loss = loss_fg + loss_bg
+    
+        return loss
+        
+    
+    
+    #----------------------------------------------------------------------------------------
     # Function to train the model
     #----------------------------------------------------------------------------------------
         
     def _train(self, epoch, train_loader):
+        if(self.activation == 'softmax'):
+            self.criterion_loss =self._bce_loss_fgbg
+        else:
+            self.criterion_loss = self._bce_loss
+        
         # loss
         running_loss = 0.0 
         lossTrain    = Averager()
@@ -353,7 +382,7 @@ class ModelTrainTest(nn.Module):
                 # plot
                 if(self.plot_test):
                     self.plotImgTest(i_step, inputs, groundtruth, prediction)
-                self.saveImgTest(i_step, inputs, groundtruth, prediction)
+                #self.saveImgTest(i_step, inputs, groundtruth, prediction)
                 
                 # Metrics
                 fmeasure, pwc = self._metrics(prediction, groundtruth)

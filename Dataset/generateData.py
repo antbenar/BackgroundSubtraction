@@ -135,6 +135,7 @@ class GenerateData(Dataset):
         self.X = self.loadImages(X_list)
         self.Y = self.loadImagesGroundtruth(Y_list)
         
+        _, self.width, self.height, _  = self.X.shape
         
         #Given a sequence of frames, divide in groups of five consecutive frames
         if (self.framesBack > 0):    

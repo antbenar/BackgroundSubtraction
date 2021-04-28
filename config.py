@@ -19,17 +19,17 @@ class Settings(object):
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~ settings model ~~~~~~~~~~~~~~~~~~~~~~~~~~~
         
         self.model_name         = model_name
-        self.model_dim          = '2D'        # dimension of the model
-        self.up_mode            = 'base'        # It changes in the main according to model_name ('base', 'M2', 'M3')
-        self.activation         = 'sigmoid'        # only used if model_dim = 2D ('softmax' or 'sigmoid')
+        self.model_dim          = ''        # dimension of the model
+        self.up_mode            = ''        # It changes in the main according to model_name ('base', 'M2', 'M3')
+        self.activation         = ''        # only used if model_dim = 2D ('softmax' or 'sigmoid')
         
         self.n_channels         = 3         # input chanels
         self.p_dropout          = 0.2       # dropout probability
         self.threshold          = 0.75      # Static threshold to make segmentation
         
         # train
-        self.epochs             = 50
-        self.batch_size         = 5
+        self.epochs             = 30
+        self.batch_size         = 3
         self.shuffle            = False
         self.train_result_dir   = os.path.join('TrainResult',self.model_name)
 
@@ -65,13 +65,13 @@ class Settings(object):
         self.showSample         = True
         self.dataset_fg_bg      = False   # To generate a 2 chanel gt, one for background an another one for foreground
         
-        self.resize             = True    # If the frames will be resized
+        self.resize             = False    # If the frames will be resized
         self.width              = 240     # width of the frame
         self.height             = 320     # height of the frame
         
         self.dataset_range      = False    # If true, uses trainStart - trainEnd to dataset
-        self.trainStart         = 200 
-        self.trainEnd           = 260
+        self.trainStart         = 1400 
+        self.trainEnd           = 2800
         
         # splits of dataset
         self.train_split        = 0.6
