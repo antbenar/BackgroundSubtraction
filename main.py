@@ -71,6 +71,19 @@ class Main():
                 up_mode    = self.settings.up_mode,
                 activation = self.settings.activation
             )
+        elif (self.settings.model_name == 'Model_M1-2D-LSTM_priority'):
+            self.settings.priority_active              = True
+            self.settings.framesBack          = 0
+            self.settings.dataset_fg_bg       = False
+            self.settings.model_dim           = '2D'
+            self.settings.activation          = 'sigmoid'
+            self.settings.up_mode             = 'base'
+            self.net = Net2D(
+                self.settings.n_channels, 
+                self.settings.p_dropout,
+                up_mode    = self.settings.up_mode,
+                activation = self.settings.activation
+            )
         elif (self.settings.model_name == 'Model_M1-2D-LSTM_softmax' or self.settings.model_name == 'Model_M1-2D-LSTM_softmax_dobleLoss'):
             self.settings.framesBack          = 0
             self.settings.dataset_fg_bg       = True
@@ -167,7 +180,7 @@ class Main():
             self.settings.dataset_fg_bg       = False
             self.settings.model_dim           = '2D'
             self.settings.activation          = 'sigmoid'
-            self.settings.up_mode             = 'base'
+            self.settings.up_mode             = 'base' 
             self.net = LoGoNet2D(
                 self.settings.n_channels, 
                 self.settings.p_dropout,
@@ -187,13 +200,13 @@ if __name__ == "__main__":
     
     # models = ['Model_M1-2D-LSTM', 'Model_M1-2D-LSTM_softmax','Model_Multiscale-2D', 'Model_Multiscale-2D_softmax']
      
-    models = ['Model_LoGo2D']
+    models = ['Model_M1-2D-LSTM_priority']
     
     for model in models:
         settings    = Settings(model)
         main        = Main(settings)
         # main.execute(mode='train_val')
         main.execute(mode='test')
-        #main.saveTrainData()
+        # main.saveTrainData()
         #main.calculateModelSize()
     

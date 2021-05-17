@@ -28,8 +28,8 @@ class Settings(object):
         self.threshold          = 0.75      # Static threshold to make segmentation
         
         # train
-        self.epochs             = 30
-        self.batch_size         = 3
+        self.epochs             = 50
+        self.batch_size         = 5
         self.shuffle            = False
         self.train_result_dir   = os.path.join('TrainResult',self.model_name)
 
@@ -40,19 +40,19 @@ class Settings(object):
         
         #scheduler
         self.scheduler_active   = False  # If true uses lr_decay_steps and lr_decay_factor
+        self.priority_active    = False
         self.lr_decay_steps     = 1e-4
         self.lr_decay_factor    = 1e-4
         
         # loader - test
-        #self.loadPath           = os.path.join('TrainResult', self.model_name , 'baseline', 'mdl_baseline_highway49.pth')
         self.loadPath           = os.path.join('TrainResult', self.model_name)
         self.plot_test          = False
-        self.log_test           = False
+        self.log_test           = True
         
         
         # tensorboard
         #self.logdir             = "logs_tensorboard/New_results/" + self.model_name+"_" + datetime.now().strftime("%d-%m-%Y_%H-%M-%S") + "/"
-        self.logdir             = "logs_tensorboard/__results_all_dirs/" + self.model_name +"/"
+        self.logdir             = "logs_tensorboard/__results_all_dirs/pruebaPrioritized_" + self.model_name +"/"
         self.view_batch         = 10                                     # print losses every n batches
         
         
@@ -65,13 +65,13 @@ class Settings(object):
         self.showSample         = True
         self.dataset_fg_bg      = False   # To generate a 2 chanel gt, one for background an another one for foreground
         
-        self.resize             = False    # If the frames will be resized
+        self.resize             = True    # If the frames will be resized
         self.width              = 240     # width of the frame
         self.height             = 320     # height of the frame
         
         self.dataset_range      = False    # If true, uses trainStart - trainEnd to dataset
-        self.trainStart         = 1400 
-        self.trainEnd           = 2800
+        self.trainStart         = 100 
+        self.trainEnd           = 120
         
         # splits of dataset
         self.train_split        = 0.6
@@ -83,21 +83,21 @@ class Settings(object):
         #  -- REVISAR BOATS (MUY LARGA)
         #  -- REVISAR FOUNTAIN, CARGA MAL EL GROUNDTRUTH
         
-        self.dataset            = {
-            'dynamicBackground':['fall']
-        }
-        
-        # self.dataset            = {
-        #     'baseline':['highway']
+        # self.dataset_scenes            = {
+        #     'dynamicBackground':['fall']
         # }
         
+        self.dataset_scenes            = {
+            'baseline':['highway']
+        }
         
-        # self.dataset            = {
+        
+        # self.dataset_scenes            = {
         #     'baseline':['highway', 'pedestrians', 'office', 'PETS2006'],
         #     'dynamicBackground':['canoe', 'fall']
         # }
         
-        # self.dataset            = {
+        # self.dataset_scenes            = {
         #     'baseline':['highway', 'pedestrians', 'office', 'PETS2006'],
         #     'cameraJitter':['badminton', 'traffic', 'boulevard', 'sidewalk'],
         #     'badWeather':['skating', 'blizzard', 'snowFall', 'wetSnow'],

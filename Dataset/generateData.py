@@ -284,6 +284,52 @@ class GenerateData(Dataset):
     
     
     #----------------------------------------------------------------------------------------
+    # Function to only get prioritized data
+    #----------------------------------------------------------------------------------------
+    
+    def getPrioritizedData(self, imIDs, weights, train_split_, val_split_, shuffle, batch_size, num_workers):
+        dataset_size = len(self.dataset[0])
+        indices      = list(range(dataset_size))
+        train_split  = int(np.floor(train_split_ * dataset_size))                # obtain the number of train samples
+        val_split    = int(np.floor(train_split_ * val_split_ * dataset_size))   # obtain the number of val samples
+        train_split  = train_split - val_split                                   # obtain the position where the train samples end
+        
+        if shuffle :
+            np.random.seed(1234)
+            indices = np.random.shuffle(indices)
+            
+        train_indices = indices[:train_split]
+        
+        loader = torch.utils.data.DataLoader(
+                    self, 
+                    batch_size  = batch_size, 
+                    num_workers = num_workers,
+                    sampler     = imIDs
+                )
+        
+        return loader
+    
+    
+    #----------------------------------------------------------------------------------------
+    # Function to only get prioritized data
+    #----------------------------------------------------------------------------------------
+       
+    def sampleID2imageID(self,arr):
+        framePerFile  = 1
+        sequence_len  = 5
+        slidingWindow = 2
+        k1 = sequence_len * int( (framePerFile-sequence_len)/slidingWindow + 1 )
+        k2 = sequence_len-slidingWindow
+        arr = np.array([ slidingWindow*x + int(x/k1)*k2 for x in arr ]).astype(int)
+
+        # Expand
+        IDs = [ np.array(range(idx,idx+sequence_len)) for idx in arr ]
+        IDs = np.concatenate(IDs)
+
+        return IDs.astype(int)
+    
+    
+    #----------------------------------------------------------------------------------------
     # Plot some samples of the dataset
     #----------------------------------------------------------------------------------------
     

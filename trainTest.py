@@ -8,15 +8,19 @@ from Dataset.generateData                import GenerateData
 from Common.TensorboardTool              import TensorBoardTool
 from Common.Util                         import Averager
 from Common.Util                         import ModelSize
+from Common.Prioritized                  import PrioritizedSamples
 from torch.utils.tensorboard             import SummaryWriter
 from matplotlib                          import pyplot as plt
 from tqdm                                import tqdm
 from termcolor                           import colored
+
+
 class ModelTrainTest(nn.Module):
     def __init__(self, net, settings):
         super().__init__()
         self.net        = net
         self.settings = settings
+        print(self.settings.priority_active)
         self._state     = {}
         
         # set settings to the model
@@ -72,7 +76,7 @@ class ModelTrainTest(nn.Module):
         self.epochs           = settings.epochs
         # dataset
         self.framesBack       = settings.framesBack
-        self.dataset          = settings.dataset
+        self.dataset_scenes   = settings.dataset_scenes
         self.dataset_dir      = settings.dataset_dir
         self.resize           = settings.resize
         self.width            = settings.width
@@ -109,20 +113,32 @@ class ModelTrainTest(nn.Module):
         # Save model
         pathMod = os.path.join(pathMod, 'mdl_' + self.category + '_' + self.scene + str(epoch) + '.pth')
         torch.save( self._state, pathMod)
+        
+        # if(self.settings.priority_active):
+        #     pathPri = os.path.join(pathMod, 'mdl_' + self.category + '_' + self.scene + '_priority.pck')
+        #     self.samplePriority.save(pathPri)
     
     
     #----------------------------------------------------------------------------------------
     # load model
     #----------------------------------------------------------------------------------------
     
-    def load(self, path):
+    def load(self):
+        path = os.path.join(self.loadPath, self.category, 'mdl_'+self.category+'_'+self.scene+'49.pth')
+        #path = os.path.join(self.loadPath, self.category, 'mdl_'+self.category+'_'+self.scene+'48.pth')
+
+        print(path)
         # Load
         checkpoint = torch.load(path)
         self.net      .load_state_dict(checkpoint['state_dict'])
         self.optimizer.load_state_dict(checkpoint[ 'optimizer'])
         if(self.scheduler_active):
             self.scheduler.load_state_dict(checkpoint[ 'scheduler'])
+        # if(self.settings.priority_active):
+        #     pathPri = os.path.join(self.loadPath, self.category, 'mdl_' + self.category + '_' + self.scene + '_priority.pck')
+        #     self.samplePriority.load(pathPri)
         print('Model loaded\n')
+        
         
     #----------------------------------------------------------------------------------------
     # Threshold function
@@ -162,7 +178,41 @@ class ModelTrainTest(nn.Module):
             
         return FMEASURE, PWC
 
+
+    #----------------------------------------------------------------------------------------
+    # Priority
+    #----------------------------------------------------------------------------------------
     
+    
+    def _updatePriority(self,loss,sampleID):
+            # Loss to update
+            loss = loss.data.cpu().numpy()
+            
+            # Update priority
+            for idx,p in zip(sampleID,[loss]):
+                self.samplePriority.update(idx,p)
+            
+            
+    """ Generate ID list """
+    def _samplingPrioritizedSamples(self,n_samples):
+        # IDs/weights
+        val = np.array([ np.array(self.samplePriority.sample()) for _ in range(n_samples) ])
+
+        spIDs   = val[:,0]
+        weights = val[:,1]
+        
+        # # Sequence
+        # # sample-ID to idx
+        # imIDs = self.dataset.sampleID2imageID(spIDs)
+        
+        # # Weights
+        # sequence_len = 5
+        # weights = [ w*np.ones(sequence_len) for w in weights ]
+        # weights = np.concatenate(weights)
+
+        return spIDs.astype(int),weights 
+       
+        
     #----------------------------------------------------------------------------------------
     # Loss function
     #----------------------------------------------------------------------------------------
@@ -211,12 +261,23 @@ class ModelTrainTest(nn.Module):
         
     def _train(self, epoch, train_loader):
         if(self.activation == 'softmax'):
-            self.criterion_loss =self._bce_loss_fgbg
+            #self.criterion_loss =self._bce_loss_fgbg
+            self.criterion_loss = self._bce_loss
         else:
             self.criterion_loss = self._bce_loss
         
+        if(self.settings.priority_active):
+            n_samples    = int(len(self.dataset)*(self.train_split-self.val_split))
+            spIDs,weights = self._samplingPrioritizedSamples(n_samples)
+
+            train_loader = self.dataset.getPrioritizedData(  
+                                              spIDs, weights,
+                                              self.train_split, self.val_split, self.shuffle, self.batch_size, self.num_workers
+                                            )
+        
+        
+        
         # loss
-        running_loss = 0.0 
         lossTrain    = Averager()
         with tqdm(total=len(train_loader),leave=True, desc="Epoch %d/%d" % (epoch,self.epochs)) as pbar:
             for i_batch, sample_batched  in enumerate(train_loader):
@@ -235,13 +296,14 @@ class ModelTrainTest(nn.Module):
                 loss.backward()
                 self.optimizer.step()
                 
-                # print statistics every num_stat_batches
-                runtime_loss      = loss.item()
-                running_loss     += runtime_loss
-                view_batch        = self.view_batch
+                # Update priority
+                if(self.settings.priority_active):
+                    self._updatePriority(loss, spIDs[self.settings.batch_size*i_batch:self.settings.batch_size*(i_batch+1)])
                 
-                if (i_batch+1) % view_batch == 0:  # print every 2000 mini-batches
-                    running_loss = 0.0
+                
+                # print statistics every num_stat_batches
+                runtime_loss      = loss.item()                
+                if (i_batch+1) % self.view_batch == 0:  # print every 2000 mini-batches
                     pbar.set_postfix({'Train loss':  '%.4f'%lossTrain.mean})
                     pbar.refresh()
                     
@@ -250,7 +312,6 @@ class ModelTrainTest(nn.Module):
                 lossTrain.update(runtime_loss)
                 del loss, outputs
                 torch.cuda.empty_cache()
-                
             pbar.close()
         lossTrain = lossTrain.val()
         return lossTrain
@@ -328,6 +389,9 @@ class ModelTrainTest(nn.Module):
             
             if(self.scheduler_active):
                 self.scheduler.step()
+               
+            if(self.settings.priority_active):
+                self.samplePriority.step()
 
             # add scalars to tensorboard
             tb.add_scalar('Loss/Train'        ,   lossTrain, epoch)
@@ -343,8 +407,8 @@ class ModelTrainTest(nn.Module):
                 if(self.scheduler_active):
                     self._state_add ( 'scheduler',self.scheduler.state_dict())
                 self._state_save(epoch)
-                
-        
+            #break
+    
         tb.close()
 
         
@@ -421,69 +485,76 @@ class ModelTrainTest(nn.Module):
     #----------------------------------------------------------------------------------------
     
     def _execute(self, mode):
-        try:
-            category      = self.category 
-            scene         = self.scene
-            fmeasure, PWC = 0, 0
-            
-            #~~~~~~~~~~~~~~~~~~~~~ Load dataset for this scene ~~~~~~~~~~~~~~~~~~~~~
-            
-            print("~~~~~~~ Generating data ->>> " + category + " / " + scene + " ~~~~~~~~~~")
-    
-            dataset_dir = os.path.join(self.dataset_dir, category, scene, 'input')
-            dataset_gt_dir = os.path.join(self.dataset_dir, category, scene, 'groundtruth')
-            
-            dataset = GenerateData(
-                dataset_gt_dir, dataset_dir,
-                framesBack    = self.framesBack,
-                resize        = self.resize,
-                width         = self.width,
-                height        = self.height,
-                dataset_range = self.dataset_range,
-                trainStart    = self.trainStart,
-                trainEnd      = self.trainEnd,
-                data_format   = self.data_format,
-                dataset_fg_bg = self.dataset_fg_bg,
-                showSample    = self.showSample,
-                differenceFrames = self.differenceFrames
-            )
-            
-            train_loader, val_loader, test_loader = dataset.train_val_test_split(
-                                                        self.train_split,
-                                                        self.val_split,
-                                                        self.shuffle,
-                                                        self.batch_size,
-                                                        self.num_workers
-                                                      )
-            
-            if(mode == 'train_val'):
-                self._train_val(train_loader, val_loader)
-            elif(mode == 'train_val_test'):
-                self._train_val(train_loader, val_loader)
-                self._test(test_loader)
-            elif(mode == 'test'):
-                loadpath = os.path.join(self.loadPath, category, 'mdl_'+category+'_'+scene+'49.pth')
-                # loadpath = self.loadPath
-                self.load(loadpath)
-                fmeasure, PWC = self._test(test_loader)
-            else: 
-                raise NameError('Mode (' + mode + ') not valid')
-            
-            del dataset, train_loader, val_loader, test_loader
-            torch.cuda.empty_cache()
-            
-            return fmeasure, PWC
+        # try:
+        category      = self.category 
+        scene         = self.scene
+        fmeasure, PWC = 0, 0
+        #self.load()
+        #~~~~~~~~~~~~~~~~~~~~~ Load dataset for this scene ~~~~~~~~~~~~~~~~~~~~~
+        
+        print("~~~~~~~ Generating data ->>> " + category + " / " + scene + " ~~~~~~~~~~")
+
+        dataset_dir = os.path.join(self.dataset_dir, category, scene, 'input')
+        dataset_gt_dir = os.path.join(self.dataset_dir, category, scene, 'groundtruth')
+        
+        self.dataset = GenerateData(
+            dataset_gt_dir, dataset_dir,
+            framesBack    = self.framesBack,
+            resize        = self.resize,
+            width         = self.width,
+            height        = self.height,
+            dataset_range = self.dataset_range,
+            trainStart    = self.trainStart,
+            trainEnd      = self.trainEnd,
+            data_format   = self.data_format,
+            dataset_fg_bg = self.dataset_fg_bg,
+            showSample    = self.showSample,
+            differenceFrames = self.differenceFrames
+        )
+        
+        train_loader, val_loader, test_loader = self.dataset.train_val_test_split(
+                                                    self.train_split,
+                                                    self.val_split,
+                                                    self.shuffle,
+                                                    self.batch_size,
+                                                    self.num_workers
+                                                  )
+        
+                
+        if(self.settings.priority_active):
+            n_samples    = int(len(self.dataset)*(self.train_split-self.val_split))
+            self.samplePriority = PrioritizedSamples( n_samples = n_samples, 
+                                                      alpha = 1.0,
+                                                      beta  = 0.0,
+                                                      betaLinear = True,
+                                                      betaPhase  = 50,
+                                                      balance = False,
+                                                      c    =  5.0,
+                                                      fill = True)
+        
+        if(mode == 'train_val'):
+            self._train_val(train_loader, val_loader)
+        elif(mode == 'test'):
+            self.load()
+            fmeasure, PWC = self._test(test_loader)
+        else: 
+            raise NameError('Mode (' + mode + ') not valid')
+        
+        del self.dataset, train_loader, val_loader, test_loader
+        torch.cuda.empty_cache()
+        
+        return fmeasure, PWC
         
         
        
-        except RuntimeError as err:
-            if(self.batch_size > 1):
-                self.batch_size -= 1
-                print('===============reducing batch size to:', self.batch_size)                  
-                return  self._execute()
-            else:
-                print(colored('='*20, 'red'))
-                print(colored('RuntimeError', 'red'), err)
+        # except RuntimeError as err:
+        #     if(self.batch_size > 1):
+        #         self.batch_size -= 1
+        #         print('===============reducing batch size to:', self.batch_size)                  
+        #         return  self._execute(mode)
+        #     else:
+        #         print(colored('='*20, 'red'))
+        #         print(colored('RuntimeError', 'red'), err)
                   
                 
     #----------------------------------------------------------------------------------------
@@ -498,7 +569,7 @@ class ModelTrainTest(nn.Module):
         csvRowPWC      = [self.model_name]
         
         # Go through each scene
-        for category, scene_list in self.dataset.items():     
+        for category, scene_list in self.dataset_scenes.items():     
             for scene in scene_list:
                 self.category = category
                 self.scene    = scene
@@ -550,7 +621,7 @@ class ModelTrainTest(nn.Module):
         
     def saveDataTensorboard(self):
         # Go through each scene
-        for category, scene_list in self.dataset.items():     
+        for category, scene_list in self.dataset_scenes.items():     
             for scene in scene_list: 
                 
                 #~~~~~~~~~~~~~~~~~~~~~ Load dataset for this scene ~~~~~~~~~~~~~~~~~~~~~
@@ -596,7 +667,7 @@ class ModelTrainTest(nn.Module):
         
     def calculateModelSize(self):
         # Go through each scene
-        for category, scene_list in self.dataset.items():     
+        for category, scene_list in self.dataset_scenes.items():     
             for scene in scene_list: 
                 
                 #~~~~~~~~~~~~~~~~~~~~~ Load dataset for this scene ~~~~~~~~~~~~~~~~~~~~~
