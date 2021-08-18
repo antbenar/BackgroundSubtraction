@@ -20,6 +20,7 @@ Thumbs.db
 # Folders
 TrainResult/
 TestResult/
+TestResult_attention/
 runs/
 .pylint.d/
 logs_tensorboard/
