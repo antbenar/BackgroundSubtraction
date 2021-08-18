@@ -28,10 +28,11 @@ class Settings(object):
         self.threshold          = 0.75      # Static threshold to make segmentation
         
         # train
-        self.epochs             = 50
+        self.epochs             = 30
         self.batch_size         = 5
         self.shuffle            = False
         self.train_result_dir   = os.path.join('TrainResult',self.model_name)
+        self.loss               = 'standard'
 
         # optimizer
         self.beta_a             = 0.9
@@ -47,7 +48,7 @@ class Settings(object):
         # loader - test
         self.loadPath           = os.path.join('TrainResult', self.model_name)
         self.plot_test          = False
-        self.log_test           = True
+        self.log_test           = False
         
         
         # tensorboard
@@ -64,14 +65,15 @@ class Settings(object):
         self.differenceFrames   = True    # Used only when framesBack > 0, It additions the framesback with the difference of the current frame
         self.showSample         = True
         self.dataset_fg_bg      = False   # To generate a 2 chanel gt, one for background an another one for foreground
+        self.onlyForeground     = False    # To generate input, gt that only contains foreground
         
         self.resize             = True    # If the frames will be resized
         self.width              = 240     # width of the frame
         self.height             = 320     # height of the frame
         
         self.dataset_range      = False    # If true, uses trainStart - trainEnd to dataset
-        self.trainStart         = 100 
-        self.trainEnd           = 120
+        self.trainStart         = 0
+        self.trainEnd           = 200
         
         # splits of dataset
         self.train_split        = 0.6
@@ -84,17 +86,21 @@ class Settings(object):
         #  -- REVISAR FOUNTAIN, CARGA MAL EL GROUNDTRUTH
         
         # self.dataset_scenes            = {
-        #     'dynamicBackground':['fall']
+        #     'baseline':['highway']
+        # }
+        
+        # self.dataset_scenes            = {
+        #     'baseline':[ 'PETS2006'],
+        #     'dynamicBackground':['canoe',],
         # }
         
         self.dataset_scenes            = {
-            'baseline':['highway']
+            'baseline':['highway', 'pedestrians', 'office', 'PETS2006'],
+            'dynamicBackground':['canoe', 'fall'],
         }
         
-        
         # self.dataset_scenes            = {
-        #     'baseline':['highway', 'pedestrians', 'office', 'PETS2006'],
-        #     'dynamicBackground':['canoe', 'fall']
+        #     'dynamicBackground':['canoe'],
         # }
         
         # self.dataset_scenes            = {

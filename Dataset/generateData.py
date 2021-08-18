@@ -23,6 +23,7 @@ class GenerateData(Dataset):
                      transform        = None, 
                      data_format      = 'channels_last',
                      dataset_fg_bg    = False,
+                     onlyForeground   = True,
                      void_value       = True,
                      showSample       = False,
                      differenceFrames = False
@@ -51,7 +52,8 @@ class GenerateData(Dataset):
         self.data_format    = data_format
         self.dataset_fg_bg  = dataset_fg_bg
         self.differenceFrames  = differenceFrames
-        
+        self.onlyForeground = onlyForeground
+
         self.resize         = resize
         self.width          = width
         self.height         = height
@@ -132,8 +134,11 @@ class GenerateData(Dataset):
             Y_list = Y_list[self.trainStart:self.trainEnd]
         
         # load training data
-        self.X = self.loadImages(X_list)
-        self.Y = self.loadImagesGroundtruth(Y_list)
+        if(not self.onlyForeground):
+            self.X = self.loadImages(X_list)
+            self.Y = self.loadImagesGroundtruth(Y_list)
+        else:
+            self.X,  self.Y = self.loadImagesForeground(X_list, Y_list)
         
         _, self.width, self.height, _  = self.X.shape
         
@@ -239,6 +244,65 @@ class GenerateData(Dataset):
         return np.asarray(Y)
     
     
+    
+    #----------------------------------------------------------------------------------------
+    # Load images that contains foreground from directory to an array (void pixels are identified with -1)
+    #----------------------------------------------------------------------------------------
+    
+    def loadImagesForeground(self, X_list, Y_list):
+        X, Y = [], []
+    
+        for i in range(len(Y_list)):
+            if(self.resize):
+                img = kImage.load_img(Y_list[i], target_size=(self.width, self.height), color_mode = "grayscale")
+            else:
+                img = kImage.load_img(Y_list[i], color_mode = "grayscale")
+            
+            img = kImage.img_to_array(img)
+            
+            if(len(np.where(img==255)[0]) > 0):
+                #print("-----------------------------" + str(len(np.where(img==255)[0])))
+                # load X (input) data
+                if(self.resize):
+                    Ximg = kImage.load_img(X_list[i], target_size=(self.width, self.height))
+                else:
+                    Ximg = kImage.load_img(X_list[i])
+                    
+                Ximg = kImage.img_to_array(Ximg)
+                X.append(Ximg)
+                
+                
+                # prepare Y data
+                if(self.void_value):
+                    shape = img.shape
+                    img/=255.0
+                    img = img.reshape(-1)
+                    idx = np.where(np.logical_and(img>0, img<1))[0] # find non-ROI
+                    if (len(idx)>0):
+                        img[idx] = self.void_label
+                    img = img.reshape(shape)
+    
+                
+                if (self.dataset_fg_bg):
+                    img_fg          = np.copy(img)
+                    img_bg          = img
+                    shape           = img_bg.shape
+                    img_bg          = img_bg.reshape(-1)
+                    idx_bg          = np.where(img_bg==0)[0] 
+                    idx_fg          = np.where(img_bg==1)[0] 
+                    
+                    img_bg[idx_bg]  = 1
+                    img_bg[idx_fg]  = 0
+                    img_bg          = img_bg.reshape(shape)
+                     
+                    img = np.concatenate([img_bg, img_fg], axis=2)
+                
+                Y.append(img)
+            
+        return np.asarray(X), np.asarray(Y)
+    
+    
+    
     #----------------------------------------------------------------------------------------
     # Function to separate the whole dataset into three subsets for training, validation of training and test
     #----------------------------------------------------------------------------------------
@@ -287,18 +351,7 @@ class GenerateData(Dataset):
     # Function to only get prioritized data
     #----------------------------------------------------------------------------------------
     
-    def getPrioritizedData(self, imIDs, weights, train_split_, val_split_, shuffle, batch_size, num_workers):
-        dataset_size = len(self.dataset[0])
-        indices      = list(range(dataset_size))
-        train_split  = int(np.floor(train_split_ * dataset_size))                # obtain the number of train samples
-        val_split    = int(np.floor(train_split_ * val_split_ * dataset_size))   # obtain the number of val samples
-        train_split  = train_split - val_split                                   # obtain the position where the train samples end
-        
-        if shuffle :
-            np.random.seed(1234)
-            indices = np.random.shuffle(indices)
-            
-        train_indices = indices[:train_split]
+    def getPrioritizedData(self, imIDs, weights, batch_size, num_workers):
         
         loader = torch.utils.data.DataLoader(
                     self, 

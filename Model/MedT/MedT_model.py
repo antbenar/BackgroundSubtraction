@@ -2,13 +2,18 @@ import torch
 import torch.nn as nn
 from torch               import functional as F
 from .MedT_parts         import conv1x1
+from .MedT_parts         import AxialBlock
 
 class medt_net(nn.Module):
 
-    def __init__(self, block, block_2, layers, num_classes=2, zero_init_residual=True,
+    def __init__(self, layers=[1, 2, 4, 1], num_classes=2, zero_init_residual=True,
                  groups=8, width_per_group=64, replace_stride_with_dilation=None,
                  norm_layer=None, s=0.125, img_size = 128,imgchan = 3):
         super(medt_net, self).__init__()
+        
+        block = AxialBlock
+        block_2 = AxialBlock
+        
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
         self._norm_layer = norm_layer

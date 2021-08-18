@@ -30,7 +30,7 @@ class MultiscaleNet2D(nn.Module):
         self.conv2DRelu3 =     Conv2DRelu(16, 32)
         #Block convLSTM
         self.convLSTM    = ConvLstm2DRelu(32, hidden_dim=[16, 16, 16]) #entran 32 canales y salen 16
-        
+         
         # PSP module
         self.psp = PSPModule(16, 16, sizes=(1, 2, 3, 6))
         
@@ -83,10 +83,10 @@ class MultiscaleNet2D(nn.Module):
 
         #~~~~~~~~~~~~~~~~~~~ Decoder ~~~~~~~~~~~~~~~~~~~~~~
 
-        x       = self.upBlock1(x, x3_, x3)
-        x       = self.upBlock2(x, x2_, x2)
-        x       = self.upBlock3(x, x1_, x1)
-        x       = self.upBlock4(x, x0)
-        x       = self.activation(x)
+        x, atention       = self.upBlock1(x, x3_, x3)
+        x, atention2        = self.upBlock2(x, x2_, x2)
+        x, atention3        = self.upBlock3(x, x1_, x1)
+        x, atention4        = self.upBlock4(x, x0)
+        x        = self.activation(x)
         
-        return x   
+        return x, atention, atention2, atention3, atention4

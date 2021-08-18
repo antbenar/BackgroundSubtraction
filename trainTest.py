@@ -4,6 +4,7 @@ import torch
 import torch.nn              as nn
 import torch.nn.functional   as F
 import numpy                 as np
+import cv2
 from Dataset.generateData                import GenerateData
 from Common.TensorboardTool              import TensorBoardTool
 from Common.Util                         import Averager
@@ -20,7 +21,6 @@ class ModelTrainTest(nn.Module):
         super().__init__()
         self.net        = net
         self.settings = settings
-        print(self.settings.priority_active)
         self._state     = {}
         
         # set settings to the model
@@ -124,8 +124,8 @@ class ModelTrainTest(nn.Module):
     #----------------------------------------------------------------------------------------
     
     def load(self):
+        #path = os.path.join(self.loadPath, self.category, 'mdl_'+self.category+'_'+self.scene+'22.pth')
         path = os.path.join(self.loadPath, self.category, 'mdl_'+self.category+'_'+self.scene+'49.pth')
-        #path = os.path.join(self.loadPath, self.category, 'mdl_'+self.category+'_'+self.scene+'48.pth')
 
         print(path)
         # Load
@@ -229,7 +229,26 @@ class ModelTrainTest(nn.Module):
         
         loss        = F.binary_cross_entropy(prediction, groundtruth, reduction='mean')
         return loss
-        
+      
+    
+    #----------------------------------------------------------------------------------------
+    # Loss function to multiple stages of the model
+    #----------------------------------------------------------------------------------------
+    
+    def muti_bce_loss_fusion(d0, d1, d2, d3, d4, d5, d6, groundtruth_):
+
+     	loss0 = F.binary_cross_entropy(d0, groundtruth_, reduction='mean')
+     	loss1 = F.binary_cross_entropy(d1, groundtruth_, reduction='mean')
+     	loss2 = F.binary_cross_entropy(d2, groundtruth_, reduction='mean')
+     	loss3 = F.binary_cross_entropy(d3, groundtruth_, reduction='mean')
+     	loss4 = F.binary_cross_entropy(d4, groundtruth_, reduction='mean')
+     	loss5 = F.binary_cross_entropy(d5, groundtruth_, reduction='mean')
+     	loss6 = F.binary_cross_entropy(d6, groundtruth_, reduction='mean')
+    
+     	loss = loss0 + loss1 + loss2 + loss3 + loss4 + loss5 + loss6
+         
+     	return loss
+
     
     #----------------------------------------------------------------------------------------
     # Loss function bg fg independently
@@ -260,20 +279,15 @@ class ModelTrainTest(nn.Module):
     #----------------------------------------------------------------------------------------
         
     def _train(self, epoch, train_loader):
-        if(self.activation == 'softmax'):
-            #self.criterion_loss =self._bce_loss_fgbg
-            self.criterion_loss = self._bce_loss
-        else:
-            self.criterion_loss = self._bce_loss
+        if(self.settings.loss == 'standard'): self.criterion_loss = self._bce_loss
+        elif(self.settings.loss == 'bce_loss_fgbg'): self.criterion_loss =self._bce_loss_fgbg
+        elif(self.settings.loss == 'multipleLoss'): self.criterion_loss = self.muti_bce_loss_fusion
         
         if(self.settings.priority_active):
             n_samples    = int(len(self.dataset)*(self.train_split-self.val_split))
             spIDs,weights = self._samplingPrioritizedSamples(n_samples)
 
-            train_loader = self.dataset.getPrioritizedData(  
-                                              spIDs, weights,
-                                              self.train_split, self.val_split, self.shuffle, self.batch_size, self.num_workers
-                                            )
+            train_loader = self.dataset.getPrioritizedData(spIDs, weights, self.batch_size, self.num_workers)
         
         
         
@@ -427,7 +441,6 @@ class ModelTrainTest(nn.Module):
         avgFmeasure  = Averager()
         avgPWC       = Averager()
         step_view = len(test_loader)//5
-        
         with tqdm(total=len(test_loader),leave=False,desc='Test') as pbar:
             for i_step, sample_batched  in enumerate(test_loader):
                 # get the inputs; data is a list of [inputs, labels]
@@ -437,7 +450,33 @@ class ModelTrainTest(nn.Module):
                 # Predict
                 with torch.no_grad():
                     outputs = self.net(inputs)
-    
+                    #self.saveImgTest(i_step, inputs, groundtruth, atention4)
+                    
+                    outputs, att1, att2, att3, att4 = self.net(inputs)
+                    # Parameters
+                    pα,pi = 1,0
+                    pα = pα/(pα+pi)
+                    pi = pi/(pα+pi)
+                    
+                    # Color map
+                    #(b, c, h, w) -> ( b, h, w, c) -> get first frame of the sequence of frames
+                    inputs      = inputs.permute(0, 2, 3, 1)[0].cpu()
+                    att         = att4.permute(0, 2, 3, 1)[0].cpu()
+                    
+                    
+                    att = att.numpy()
+                    att = np.mean(att, axis=2, keepdims=True)
+                    # att = np.clip(att, 0,255)
+                    att = np.uint8(att)
+                    map = cv2.applyColorMap(att, cv2.COLORMAP_JET)# COLORMAP_JET
+
+                    # Add to image
+                    im = inputs*pi + map*pα
+                    im = np.uint8(im)
+                    #im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
+
+                    self.saveImgTest(i_step, inputs, groundtruth, im)
+                    
                 if(self.activation == 'softmax'):
                     prediction  = torch.argmax(outputs, dim=1, keepdim=True).float()
                 else:
@@ -446,7 +485,7 @@ class ModelTrainTest(nn.Module):
                 # plot
                 if(self.plot_test):
                     self.plotImgTest(i_step, inputs, groundtruth, prediction)
-                #self.saveImgTest(i_step, inputs, groundtruth, prediction)
+                
                 
                 # Metrics
                 fmeasure, pwc = self._metrics(prediction, groundtruth)
@@ -463,8 +502,8 @@ class ModelTrainTest(nn.Module):
                         
                         # add segmentation and groundtruth to tensorboard
                         dim5D = self.framesBack > 0
-                        tensorBoardTool = TensorBoardTool(dir_tb, dim5D)
-                        tensorBoardTool.saveImgTest(self.model_name, (i_step+1)//step_view, inputs, groundtruth, prediction)
+                        #tensorBoardTool = TensorBoardTool(dir_tb, dim5D)
+                        #tensorBoardTool.saveImgTest(self.model_name, (i_step+1)//step_view, inputs, groundtruth, prediction)
                         
                     pbar.set_postfix({'f-measure':  '%.4f'%avgFmeasure.mean,'PWC':  '%.4f'%avgPWC.mean})
                 pbar.update()
@@ -508,6 +547,7 @@ class ModelTrainTest(nn.Module):
             trainEnd      = self.trainEnd,
             data_format   = self.data_format,
             dataset_fg_bg = self.dataset_fg_bg,
+            onlyForeground= self.settings.onlyForeground,
             showSample    = self.showSample,
             differenceFrames = self.differenceFrames
         )
@@ -641,6 +681,7 @@ class ModelTrainTest(nn.Module):
                     trainStart    = self.trainStart,
                     trainEnd      = self.trainEnd,
                     data_format   = self.data_format,
+                    onlyForeground= self.settings.onlyForeground,
                     void_value    = False,
                     showSample    = self.showSample
                 )
@@ -687,6 +728,7 @@ class ModelTrainTest(nn.Module):
                     trainStart    = self.trainStart,
                     trainEnd      = self.trainEnd,
                     data_format   = self.data_format,
+                    onlyForeground= self.settings.onlyForeground,
                     void_value    = False,
                     showSample    = self.showSample
                 )
@@ -776,15 +818,17 @@ class ModelTrainTest(nn.Module):
             prediction  = prediction_.permute(2, 0, 3, 4, 1)[0]
         else :
             # (b, c, h, w) -> (b, h, w, c)
-            inputs      = inputs_.permute(0, 2, 3, 1)
+            #inputs      = inputs_.permute(0, 2, 3, 1)
             groundtruth = groundtruth_.permute(0, 2, 3, 1)
-            prediction  = prediction_.permute(0, 2, 3, 1)
+            #prediction  = prediction_[0]
 
         # get only the first element of the batch
-        inputs      = inputs[0].cpu().numpy()
+        #inputs      = inputs[0].cpu().numpy()
+        inputs      = inputs_
         groundtruth = groundtruth[0].cpu().numpy()
-        prediction  =  prediction[0].cpu().numpy()
- 
+        #prediction  =  prediction.cpu().numpy()
+        prediction  =  prediction_
+        
         # change -1 to a gray color
         shape          = groundtruth.shape
         groundtruth    = groundtruth.reshape(-1)
@@ -794,14 +838,14 @@ class ModelTrainTest(nn.Module):
         groundtruth = groundtruth.reshape(shape)
  
         #save img
-        pathTest = os.path.join('TestResult', self.model_name, self.category, self.scene)
+        pathTest = os.path.join('TestResult_attention', self.model_name, self.category, self.scene)
         if not os.path.exists(pathTest):
             os.makedirs(pathTest)
             
             
         pathTest = os.path.join(pathTest, str(step))
         
-        fig, (ax, ax2, ax3) = plt.subplots(1, 3)
+        fig, (ax, ax2, ax3) = plt.subplots(1, 3, figsize=(9, 4.5), tight_layout=True)
         ax.set_title('Input #{}'.format(step))
         ax.axis('off')
         ax.imshow(inputs/255)
@@ -812,9 +856,14 @@ class ModelTrainTest(nn.Module):
         ax2.imshow(groundtruth, cmap=plt.get_cmap('gray'))
         plt.tight_layout()
 
+        # min = np.amin(prediction)
+        # max = np.amax(prediction)
+        # prediction = ((prediction - min) / (max - min))
+
+
         ax3.set_title('Predict #{}'.format(step))
         ax3.axis('off')
-        ax3.imshow(prediction, cmap=plt.get_cmap('gray'))
+        ax3.imshow(prediction)
         plt.tight_layout()
 
         plt.savefig(pathTest)

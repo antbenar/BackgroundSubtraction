@@ -203,13 +203,13 @@ class Up2D(nn.Module):
     def forward(self, input_tensor, prev_tensor1, prev_tensor2) :
         x = self.convTranspose2d(input_tensor)        
         if(self.use_attention):
-            x = self.atention(prev_tensor1, x)
-        x = torch.cat([prev_tensor1, x], dim=1)
+            atention = self.atention(prev_tensor1, x)
+        x = torch.cat([prev_tensor1, atention], dim=1)
         x = self.conv2d(x)
         x = self.batchNormalization(x)
         x = self.relu(x)
         x = torch.cat([x, prev_tensor2], dim=1)
-        return x
+        return x, atention
     
     
 #----------------------------------------------------------------------------------------
@@ -233,13 +233,13 @@ class Up2D_2(nn.Module):
     def forward(self, input_tensor, prev_tensor) :
         x = self.convTranspose2d(input_tensor)
         if(self.use_attention):
-            x = self.atention(prev_tensor, x)
-        x = torch.cat([prev_tensor, x], dim=1)
+            atention = self.atention(prev_tensor, x)
+        x = torch.cat([prev_tensor, atention], dim=1)
         x = self.conv2d(x)
         x = self.batchNormalization(x)
         x = self.relu(x)
         x = self.dropout(x)
-        return x
+        return x, atention
     
     
     
